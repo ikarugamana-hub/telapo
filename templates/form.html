@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>{% if company %}企業情報の編集{% else %}新規企業登録{% endif %}</h2>
+
+<form method="post" class="company-form">
+    <label>会社名 *
+        <input type="text" name="company_name" value="{{ company['company_name'] if company else '' }}" required>
+    </label>
+
+    <label>業種
+        <input type="text" name="industry" list="industry-list" value="{{ company['industry'] if company else '' }}">
+        <datalist id="industry-list">
+            {% for ind in industries %}
+            <option value="{{ ind }}"></option>
+            {% endfor %}
+        </datalist>
+    </label>
+
+    <label>都道府県
+        <select name="prefecture" id="form-prefecture">
+            <option value="">選択してください</option>
+            {% for pref in ['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県'] %}
+            <option value="{{ pref }}" {% if company and company['prefecture'] == pref %}selected{% endif %}>{{ pref }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>市区町村
+        <select name="municipality" id="form-municipality">
+            <option value="">選択してください</option>
+        </select>
+    </label>
+
+    <label>従業員数
+        <input type="number" name="employees" value="{{ company['employees'] if company else '' }}" min="0">
+    </label>
+
+    <label>電話番号
+        <input type="text" name="phone" value="{{ company['phone'] if company else '' }}">
+    </label>
+
+    <label>部署
+        <input type="text" name="department" value="{{ company['department'] if company else '' }}">
+    </label>
+
+    <label>担当者
+        <input type="text" name="contact_person" value="{{ company['contact_person'] if company else '' }}">
+    </label>
+
+    <label>状況
+        <select name="status">
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if company and company['status'] == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>メモ
+        <textarea name="memo" rows="3">{{ company['memo'] if company else '' }}</textarea>
+    </label>
+
+    <div class="form-actions">
+        <button type="submit">{% if company %}更新{% else %}登録{% endif %}</button>
+        <a href="{{ url_for('index') }}">一覧へ戻る</a>
+    </div>
+</form>
+
+<script src="{{ url_for('static', filename='cascade.js') }}"></script>
+<script>
+    setupCascadingSelect('form-prefecture', 'form-municipality', {{ (company['municipality'] if company else '') | tojson }}, '選択してください');
+</script>
+
+{% endblock %}

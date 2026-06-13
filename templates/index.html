@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="filter-box">
+    <form method="get" action="{{ url_for('index') }}">
+        <div class="filter-row">
+            <label>キーワード
+                <input type="text" name="keyword" value="{{ filters.get('keyword', '') }}" placeholder="会社名・担当者名">
+            </label>
+
+            <label>業種
+                <select name="industry">
+                    <option value="">すべて</option>
+                    {% for ind in industries %}
+                    <option value="{{ ind }}" {% if filters.get('industry') == ind %}selected{% endif %}>{{ ind }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label>都道府県
+                <select name="prefecture" id="filter-prefecture">
+                    <option value="">すべて</option>
+                    {% for pref in prefectures %}
+                    <option value="{{ pref }}" {% if filters.get('prefecture') == pref %}selected{% endif %}>{{ pref }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label>市区町村
+                <select name="municipality" id="filter-municipality">
+                    <option value="">すべて</option>
+                    {% for muni in municipalities %}
+                    <option value="{{ muni }}" {% if filters.get('municipality') == muni %}selected{% endif %}>{{ muni }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label>状況
+                <select name="status">
+                    <option value="">すべて</option>
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if filters.get('status') == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label>従業員数 (以上)
+                <input type="number" name="employees_min" value="{{ filters.get('employees_min', '') }}" min="0">
+            </label>
+
+            <label>従業員数 (以下)
+                <input type="number" name="employees_max" value="{{ filters.get('employees_max', '') }}" min="0">
+            </label>
+        </div>
+
+        <div class="filter-actions">
+            <button type="submit">絞り込み</button>
+            <a href="{{ url_for('index') }}">条件クリア</a>
+            <a href="{{ url_for('export', **filters) }}">この条件でCSV出力</a>
+            <a href="{{ url_for('add') }}">＋ 新規登録</a>
+            <a href="{{ url_for('collect') }}" class="add-link">業種・地域からリスト自動作成</a>
+        </div>
+    </form>
+</section>
+
+<p class="result-count">該当件数: {{ total }} 件</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>会社名</th>
+            <th>業種</th>
+            <th>都道府県</th>
+            <th>市区町村</th>
+            <th>従業員数</th>
+            <th>電話番号</th>
+            <th>部署</th>
+            <th>担当者</th>
+            <th>状況</th>
+            <th>メモ</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for c in companies %}
+        <tr>
+            <td>{{ c['company_name'] }}</td>
+            <td>{{ c['industry'] }}</td>
+            <td>{{ c['prefecture'] }}</td>
+            <td>{{ c['municipality'] }}</td>
+            <td>{{ c['employees'] }}</td>
+            <td>{{ c['phone'] }}</td>
+            <td>{{ c['department'] }}</td>
+            <td>{{ c['contact_person'] }}</td>
+            <td><span class="status status-{{ c['status'] }}">{{ c['status'] }}</span></td>
+            <td>{{ c['memo'] }}</td>
+            <td class="actions">
+                <a href="{{ url_for('edit', company_id=c['id']) }}">編集</a>
+                <form method="post" action="{{ url_for('delete', company_id=c['id']) }}" onsubmit="return confirm('削除しますか?');">
+                    <button type="submit">削除</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script src="{{ url_for('static', filename='cascade.js') }}"></script>
+<script>
+    setupCascadingSelect('filter-prefecture', 'filter-municipality', {{ (filters.get('municipality') or '') | tojson }}, 'すべて');
+</script>
+
+{% endblock %}

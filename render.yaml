@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: telecall-list-app
+    runtime: python
+    plan: starter
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app"
+    envVars:
+      - key: GBIZINFO_API_TOKEN
+        sync: false
+      - key: DB_PATH
+        value: /data/telecall.db
+    disk:
+      name: telecall-data
+      mountPath: /data
+      sizeGB: 1
