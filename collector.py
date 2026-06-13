@@ -174,6 +174,7 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count):
         employees = None
         contact_person = ""
         department = ""
+        actual_industry = "業種不明(要確認)"
         memo_parts = [f"自動収集(gBizINFO) 法人番号:{corporate_number}"]
 
         if detail:
@@ -185,17 +186,19 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count):
             department = (detail.get("representative_position") or "").strip()
             business_summary = detail.get("business_summary")
             if business_summary:
-                memo_parts.append(f"事業概要:{business_summary}")
+                # gBizINFOは業種(日本標準産業分類)を返さないため、事業概要を業種欄の代わりに表示する
+                actual_industry = business_summary
             company_url = detail.get("company_url")
             if company_url:
                 memo_parts.append(f"URL:{company_url}")
 
+        memo_parts.append(f"検索時の指定業種:{industry}")
         memo_parts.append("※電話番号は要調査")
 
         companies.append(
             {
                 "company_name": item.get("name", ""),
-                "industry": industry,
+                "industry": actual_industry,
                 "prefecture": prefecture,
                 "municipality": municipality,
                 "employees": employees,

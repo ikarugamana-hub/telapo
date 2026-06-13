@@ -4,7 +4,12 @@
 <h2>業種・地域からテレアポリストを自動作成</h2>
 
 {% if using_real_api %}
-<p class="notice notice-info">gBizINFO APIを使用して企業情報を取得します。</p>
+<p class="notice notice-info">
+    gBizINFO APIを使用して、指定した地域の企業を取得します。<br>
+    <strong>gBizINFOには業種で絞り込む機能がないため、ここで選択した業種は検索条件には使われません。</strong>
+    取得結果の「業種」欄には各企業の事業概要(gBizINFO登録情報)を表示します。事業概要が未登録の企業は「業種不明(要確認)」と表示されるので、
+    架電前に内容を確認・修正してください。
+</p>
 {% else %}
 <p class="notice notice-warn">
     現在 <code>GBIZINFO_API_TOKEN</code> が設定されていないため、業種・地域に応じた<strong>サンプルデータ</strong>を自動生成します。<br>
