@@ -44,6 +44,15 @@
                 </select>
             </label>
 
+            <label>当社担当者
+                <select name="assigned_to">
+                    <option value="">すべて</option>
+                    {% for dept in assigned_to_choices %}
+                    <option value="{{ dept }}" {% if filters.get('assigned_to') == dept %}selected{% endif %}>{{ dept }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
             <label>従業員数 (以上)
                 <input type="number" name="employees_min" value="{{ filters.get('employees_min', '') }}" min="0">
             </label>

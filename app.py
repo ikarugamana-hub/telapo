@@ -16,6 +16,7 @@ DB_PATH = Path(os.environ.get("DB_PATH", Path(__file__).parent / "telecall.db"))
 app = Flask(__name__)
 
 STATUS_CHOICES = ["未架電", "架電中", "通話済み", "アポ獲得", "NG", "不通"]
+ASSIGNED_TO_CHOICES = [f"営業{i}部" for i in range(1, 8)]
 
 
 def get_db():
@@ -120,6 +121,11 @@ def build_filters(args):
         conditions.append("status = ?")
         params.append(status)
 
+    assigned_to = args.get("assigned_to", "").strip()
+    if assigned_to:
+        conditions.append("assigned_to = ?")
+        params.append(assigned_to)
+
     employees_min = args.get("employees_min", "").strip()
     if employees_min:
         conditions.append("employees >= ?")
@@ -156,6 +162,7 @@ def index():
         prefectures=prefectures,
         municipalities=municipalities,
         statuses=STATUS_CHOICES,
+        assigned_to_choices=ASSIGNED_TO_CHOICES,
         filters=request.args,
         total=len(rows),
     )
@@ -188,7 +195,7 @@ def add():
         db.commit()
         return redirect(url_for("index"))
 
-    return render_template("form.html", company=None, statuses=STATUS_CHOICES, industries=INDUSTRY_CHOICES)
+    return render_template("form.html", company=None, statuses=STATUS_CHOICES, industries=INDUSTRY_CHOICES, assigned_to_choices=ASSIGNED_TO_CHOICES)
 
 
 @app.route("/edit/<int:company_id>", methods=["GET", "POST"])
@@ -221,7 +228,7 @@ def edit(company_id):
         return redirect(url_for("index"))
 
     company = db.execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
-    return render_template("form.html", company=company, statuses=STATUS_CHOICES, industries=INDUSTRY_CHOICES)
+    return render_template("form.html", company=company, statuses=STATUS_CHOICES, industries=INDUSTRY_CHOICES, assigned_to_choices=ASSIGNED_TO_CHOICES)
 
 
 @app.route("/delete/<int:company_id>", methods=["POST"])
