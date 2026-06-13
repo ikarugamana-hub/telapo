@@ -296,7 +296,8 @@ def collect():
         industry = request.form["industry"]
         prefecture = request.form["prefecture"]
         municipality = request.form["municipality"]
-        count = max(1, min(50, int(request.form.get("count", 10))))
+        count = max(1, min(100, int(request.form.get("count", 10))))
+        assigned_to = request.form.get("assigned_to", "")
 
         results = collect_companies(industry, prefecture, municipality, count)
 
@@ -304,14 +305,14 @@ def collect():
         db.executemany(
             """
             INSERT INTO companies
-                (company_name, industry, prefecture, municipality, employees, phone, department, contact_person, status, memo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (company_name, industry, prefecture, municipality, employees, phone, department, contact_person, status, memo, assigned_to)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     c["company_name"], c["industry"], c["prefecture"], c["municipality"],
                     c["employees"], c["phone"], c["department"], c["contact_person"],
-                    c["status"], c["memo"],
+                    c["status"], c["memo"], assigned_to,
                 )
                 for c in results
             ],
@@ -327,6 +328,7 @@ def collect():
     return render_template(
         "collect.html",
         industries=INDUSTRY_CHOICES,
+        assigned_to_choices=ASSIGNED_TO_CHOICES,
         using_real_api=bool(os.environ.get("GBIZINFO_API_TOKEN")),
     )
 
