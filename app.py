@@ -284,7 +284,6 @@ def collect():
 
         return redirect(url_for(
             "index",
-            industry=industry,
             prefecture=prefecture,
             municipality=municipality,
         ))
