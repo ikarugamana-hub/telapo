@@ -139,20 +139,27 @@ def _fetch_gbizinfo_detail(corporate_number, headers):
         return None
 
 
-def fetch_from_gbizinfo(industry, prefecture, municipality, count):
+def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corporate_numbers=None, exclude_names=None):
     """gBizINFO APIから企業情報を取得する(要 GBIZINFO_API_TOKEN)。
 
-    検索APIで企業一覧(会社名・所在地・法人番号)を取得した後、法人番号ごとに
-    詳細APIを呼び、従業員数・代表者名・事業概要・企業URLを補完する。
+    検索APIで企業一覧(会社名・所在地・法人番号)を取得した後、既に登録済みの
+    企業(法人番号・会社名で判定)を除外し、法人番号ごとに詳細APIを呼んで
+    従業員数・代表者名・事業概要・企業URLを補完する。従業員数が多い企業を
+    優先して上位 count 件を返す。
     ただし電話番号・部署・担当者部署名は gBizINFO に存在しないため空欄
     (要手動調査)とする。
     """
+    exclude_corporate_numbers = exclude_corporate_numbers or set()
+    exclude_names = exclude_names or set()
+
     prefecture_code = PREFECTURE_CODES.get(prefecture)
     city_code = CITY_CODES.get(f"{prefecture}|{municipality}")
     if prefecture_code is None or city_code is None:
         return []
 
     headers = {"X-hojinInfo-api-token": GBIZINFO_API_TOKEN, "Accept": "application/json"}
+    # 重複除外後に十分な件数を確保するため、必要件数より多めに取得する(APIの上限は100件)
+    pool_size = min(100, count + 20)
     params = {
         "prefecture": prefecture_code,
         "city": city_code,
@@ -160,16 +167,32 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count):
         # 法人活動情報(従業員数・代表者名等)を持つ企業に絞り込む
         "exist_flg": "true",
         "page": 1,
-        "limit": count,
+        "limit": pool_size,
     }
     response = requests.get(GBIZINFO_ENDPOINT, headers=headers, params=params, timeout=10)
     response.raise_for_status()
     data = response.json()
 
-    companies = []
-    for item in data.get("hojin-infos", [])[:count]:
+    candidates = []
+    for item in data.get("hojin-infos", []):
+        corporate_number = item.get("corporate_number", "")
+        name = item.get("name", "")
+        if corporate_number in exclude_corporate_numbers or name in exclude_names:
+            continue
+        candidates.append(item)
+
+    detailed = []
+    for item in candidates:
         corporate_number = item.get("corporate_number", "")
         detail = _fetch_gbizinfo_detail(corporate_number, headers) if corporate_number else None
+        detailed.append((item, detail))
+
+    # 従業員数が判明している企業を優先(従業員数の多い順)し、不明な企業は最後に回す
+    detailed.sort(key=lambda pair: pair[1].get("employee_number") if pair[1] and pair[1].get("employee_number") is not None else -1, reverse=True)
+
+    companies = []
+    for item, detail in detailed[:count]:
+        corporate_number = item.get("corporate_number", "")
 
         employees = None
         contact_person = ""
@@ -212,11 +235,11 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count):
     return companies
 
 
-def collect_companies(industry, prefecture, municipality, count):
+def collect_companies(industry, prefecture, municipality, count, exclude_corporate_numbers=None, exclude_names=None):
     """企業情報を収集する。APIトークンがあれば実データ、無ければサンプルデータを返す。"""
     if GBIZINFO_API_TOKEN:
         try:
-            results = fetch_from_gbizinfo(industry, prefecture, municipality, count)
+            results = fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corporate_numbers, exclude_names)
             if results:
                 return results
         except requests.RequestException:

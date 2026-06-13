@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: starter
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app"
+    startCommand: "gunicorn app:app --timeout 180"
     envVars:
       - key: GBIZINFO_API_TOKEN
         sync: false

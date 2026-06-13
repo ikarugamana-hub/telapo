@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import re
 import sqlite3
 from datetime import date
 from pathlib import Path
@@ -299,9 +300,26 @@ def collect():
         count = max(1, min(100, int(request.form.get("count", 10))))
         assigned_to = request.form.get("assigned_to", "")
 
-        results = collect_companies(industry, prefecture, municipality, count)
-
         db = get_db()
+
+        # 同じ地域で既に登録済みの企業を法人番号・会社名で除外し、重複登録を防ぐ
+        existing_rows = db.execute(
+            "SELECT company_name, memo FROM companies WHERE prefecture=? AND municipality=?",
+            (prefecture, municipality),
+        ).fetchall()
+        exclude_names = {r["company_name"] for r in existing_rows}
+        exclude_corporate_numbers = set()
+        for r in existing_rows:
+            m = re.search(r"法人番号:(\d+)", r["memo"] or "")
+            if m:
+                exclude_corporate_numbers.add(m.group(1))
+
+        results = collect_companies(
+            industry, prefecture, municipality, count,
+            exclude_corporate_numbers=exclude_corporate_numbers,
+            exclude_names=exclude_names,
+        )
+
         db.executemany(
             """
             INSERT INTO companies
