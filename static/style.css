@@ -167,6 +167,14 @@ th {
 .status-NG { background: #f8d7da; color: #721c24; }
 .status-不通 { background: #ddd; color: #555; }
 
+tr.reminder-due {
+    background: #fff0f0;
+}
+
+tr.reminder-due:hover {
+    background: #ffe2e2;
+}
+
 .notice {
     padding: 12px 16px;
     border-radius: 6px;

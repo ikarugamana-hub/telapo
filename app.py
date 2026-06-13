@@ -2,6 +2,7 @@ import csv
 import io
 import os
 import sqlite3
+from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -17,6 +18,13 @@ app = Flask(__name__)
 
 STATUS_CHOICES = ["未架電", "架電中", "通話済み", "アポ獲得", "NG", "不通"]
 ASSIGNED_TO_CHOICES = [f"営業{i}部" for i in range(1, 8)]
+
+SORT_OPTIONS = {
+    "id_desc": ("id", "DESC", "新着順"),
+    "status": ("status", "ASC", "状況順"),
+    "reminder_date": ("reminder_date", "ASC", "リマインダー日順"),
+    "company_name": ("company_name", "ASC", "会社名順"),
+}
 
 
 def get_db():
@@ -58,6 +66,10 @@ def init_db():
         db.execute("ALTER TABLE companies ADD COLUMN municipality TEXT")
     if "assigned_to" not in columns:
         db.execute("ALTER TABLE companies ADD COLUMN assigned_to TEXT")
+    if "last_visit_date" not in columns:
+        db.execute("ALTER TABLE companies ADD COLUMN last_visit_date TEXT")
+    if "reminder_date" not in columns:
+        db.execute("ALTER TABLE companies ADD COLUMN reminder_date TEXT")
 
     count = db.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
     if count == 0:
@@ -147,8 +159,13 @@ def index():
     db = get_db()
     where, params = build_filters(request.args)
 
+    sort = request.args.get("sort", "id_desc")
+    if sort not in SORT_OPTIONS:
+        sort = "id_desc"
+    sort_column, sort_dir, _ = SORT_OPTIONS[sort]
+
     rows = db.execute(
-        f"SELECT * FROM companies {where} ORDER BY id DESC", params
+        f"SELECT * FROM companies {where} ORDER BY {sort_column} {sort_dir}, id DESC", params
     ).fetchall()
 
     industries = [r[0] for r in db.execute("SELECT DISTINCT industry FROM companies ORDER BY industry").fetchall()]
@@ -163,8 +180,11 @@ def index():
         municipalities=municipalities,
         statuses=STATUS_CHOICES,
         assigned_to_choices=ASSIGNED_TO_CHOICES,
+        sort_options=SORT_OPTIONS,
+        current_sort=sort,
         filters=request.args,
         total=len(rows),
+        today=date.today().isoformat(),
     )
 
 
@@ -175,8 +195,8 @@ def add():
         db.execute(
             """
             INSERT INTO companies
-                (company_name, industry, prefecture, municipality, employees, phone, department, contact_person, status, memo, assigned_to)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (company_name, industry, prefecture, municipality, employees, phone, department, contact_person, status, memo, assigned_to, last_visit_date, reminder_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 request.form["company_name"],
@@ -190,6 +210,8 @@ def add():
                 request.form.get("status", "未架電"),
                 request.form.get("memo", ""),
                 request.form.get("assigned_to", ""),
+                request.form.get("last_visit_date", ""),
+                request.form.get("reminder_date", ""),
             ),
         )
         db.commit()
@@ -206,7 +228,7 @@ def edit(company_id):
             """
             UPDATE companies
             SET company_name=?, industry=?, prefecture=?, municipality=?, employees=?, phone=?,
-                department=?, contact_person=?, status=?, memo=?, assigned_to=?
+                department=?, contact_person=?, status=?, memo=?, assigned_to=?, last_visit_date=?, reminder_date=?
             WHERE id=?
             """,
             (
@@ -221,6 +243,8 @@ def edit(company_id):
                 request.form.get("status", "未架電"),
                 request.form.get("memo", ""),
                 request.form.get("assigned_to", ""),
+                request.form.get("last_visit_date", ""),
+                request.form.get("reminder_date", ""),
                 company_id,
             ),
         )
@@ -249,11 +273,12 @@ def export():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["会社名", "業種", "都道府県", "市区町村", "従業員数", "電話番号", "部署", "担当者", "状況", "メモ", "当社担当者"])
+    writer.writerow(["会社名", "業種", "都道府県", "市区町村", "従業員数", "電話番号", "部署", "担当者", "状況", "メモ", "当社担当者", "最新訪問日", "リマインダー日"])
     for r in rows:
         writer.writerow(
             [r["company_name"], r["industry"], r["prefecture"], r["municipality"], r["employees"],
-             r["phone"], r["department"], r["contact_person"], r["status"], r["memo"], r["assigned_to"]]
+             r["phone"], r["department"], r["contact_person"], r["status"], r["memo"], r["assigned_to"],
+             r["last_visit_date"], r["reminder_date"]]
         )
 
     csv_bytes = io.BytesIO(output.getvalue().encode("utf-8-sig"))

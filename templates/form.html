@@ -57,6 +57,14 @@
         </select>
     </label>
 
+    <label>最新訪問日
+        <input type="date" name="last_visit_date" value="{{ company['last_visit_date'] if company else '' }}">
+    </label>
+
+    <label>リマインダー日
+        <input type="date" name="reminder_date" value="{{ company['reminder_date'] if company else '' }}">
+    </label>
+
     <label>状況
         <select name="status">
             {% for s in statuses %}

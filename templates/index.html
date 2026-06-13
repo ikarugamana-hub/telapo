@@ -60,6 +60,14 @@
             <label>従業員数 (以下)
                 <input type="number" name="employees_max" value="{{ filters.get('employees_max', '') }}" min="0">
             </label>
+
+            <label>並び替え
+                <select name="sort">
+                    {% for key, opt in sort_options.items() %}
+                    <option value="{{ key }}" {% if current_sort == key %}selected{% endif %}>{{ opt[2] }}</option>
+                    {% endfor %}
+                </select>
+            </label>
         </div>
 
         <div class="filter-actions">
@@ -87,13 +95,15 @@
             <th>担当者</th>
             <th>当社担当者</th>
             <th>状況</th>
+            <th>最新訪問日</th>
+            <th>リマインダー日</th>
             <th>メモ</th>
             <th>操作</th>
         </tr>
     </thead>
     <tbody>
         {% for c in companies %}
-        <tr>
+        <tr class="{% if c['reminder_date'] and c['reminder_date'] <= today %}reminder-due{% endif %}">
             <td class="col-company">
                 {{ c['company_name'] }}
                 <a class="google-link" href="https://www.google.com/search?q={{ c['company_name'] | urlencode }}" target="_blank" rel="noopener" title="Googleで検索">検索</a>
@@ -107,6 +117,8 @@
             <td>{{ c['contact_person'] }}</td>
             <td>{{ c['assigned_to'] or '' }}</td>
             <td><span class="status status-{{ c['status'] }}">{{ c['status'] }}</span></td>
+            <td>{{ c['last_visit_date'] or '' }}</td>
+            <td>{{ c['reminder_date'] or '' }}</td>
             <td>{{ c['memo'] }}</td>
             <td class="actions">
                 <a href="{{ url_for('edit', company_id=c['id']) }}">編集</a>
