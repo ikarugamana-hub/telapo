@@ -96,7 +96,7 @@
             <td>{{ c['phone'] }}</td>
             <td>{{ c['department'] }}</td>
             <td>{{ c['contact_person'] }}</td>
-            <td>{{ c['assigned_to'] }}</td>
+            <td>{{ c['assigned_to'] or '' }}</td>
             <td><span class="status status-{{ c['status'] }}">{{ c['status'] }}</span></td>
             <td>{{ c['memo'] }}</td>
             <td class="actions">
