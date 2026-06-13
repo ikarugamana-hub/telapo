@@ -48,6 +48,10 @@
         <input type="text" name="contact_person" value="{{ company['contact_person'] if company else '' }}">
     </label>
 
+    <label>当社担当者
+        <input type="text" name="assigned_to" value="{{ company['assigned_to'] if company else '' }}">
+    </label>
+
     <label>状況
         <select name="status">
             {% for s in statuses %}

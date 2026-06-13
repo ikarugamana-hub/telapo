@@ -55,6 +55,8 @@ def init_db():
     columns = [r[1] for r in db.execute("PRAGMA table_info(companies)").fetchall()]
     if "municipality" not in columns:
         db.execute("ALTER TABLE companies ADD COLUMN municipality TEXT")
+    if "assigned_to" not in columns:
+        db.execute("ALTER TABLE companies ADD COLUMN assigned_to TEXT")
 
     count = db.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
     if count == 0:
@@ -166,8 +168,8 @@ def add():
         db.execute(
             """
             INSERT INTO companies
-                (company_name, industry, prefecture, municipality, employees, phone, department, contact_person, status, memo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (company_name, industry, prefecture, municipality, employees, phone, department, contact_person, status, memo, assigned_to)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 request.form["company_name"],
@@ -180,6 +182,7 @@ def add():
                 request.form.get("contact_person", ""),
                 request.form.get("status", "未架電"),
                 request.form.get("memo", ""),
+                request.form.get("assigned_to", ""),
             ),
         )
         db.commit()
@@ -196,7 +199,7 @@ def edit(company_id):
             """
             UPDATE companies
             SET company_name=?, industry=?, prefecture=?, municipality=?, employees=?, phone=?,
-                department=?, contact_person=?, status=?, memo=?
+                department=?, contact_person=?, status=?, memo=?, assigned_to=?
             WHERE id=?
             """,
             (
@@ -210,6 +213,7 @@ def edit(company_id):
                 request.form.get("contact_person", ""),
                 request.form.get("status", "未架電"),
                 request.form.get("memo", ""),
+                request.form.get("assigned_to", ""),
                 company_id,
             ),
         )
@@ -238,11 +242,11 @@ def export():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["会社名", "業種", "都道府県", "市区町村", "従業員数", "電話番号", "部署", "担当者", "状況", "メモ"])
+    writer.writerow(["会社名", "業種", "都道府県", "市区町村", "従業員数", "電話番号", "部署", "担当者", "状況", "メモ", "当社担当者"])
     for r in rows:
         writer.writerow(
             [r["company_name"], r["industry"], r["prefecture"], r["municipality"], r["employees"],
-             r["phone"], r["department"], r["contact_person"], r["status"], r["memo"]]
+             r["phone"], r["department"], r["contact_person"], r["status"], r["memo"], r["assigned_to"]]
         )
 
     csv_bytes = io.BytesIO(output.getvalue().encode("utf-8-sig"))

@@ -68,7 +68,7 @@
 <table>
     <thead>
         <tr>
-            <th>会社名</th>
+            <th class="col-company">会社名</th>
             <th>業種</th>
             <th>都道府県</th>
             <th>市区町村</th>
@@ -76,6 +76,7 @@
             <th>電話番号</th>
             <th>部署</th>
             <th>担当者</th>
+            <th>当社担当者</th>
             <th>状況</th>
             <th>メモ</th>
             <th>操作</th>
@@ -84,7 +85,10 @@
     <tbody>
         {% for c in companies %}
         <tr>
-            <td>{{ c['company_name'] }}</td>
+            <td class="col-company">
+                {{ c['company_name'] }}
+                <a class="google-link" href="https://www.google.com/search?q={{ c['company_name'] | urlencode }}" target="_blank" rel="noopener" title="Googleで検索">検索</a>
+            </td>
             <td>{{ c['industry'] }}</td>
             <td>{{ c['prefecture'] }}</td>
             <td>{{ c['municipality'] }}</td>
@@ -92,6 +96,7 @@
             <td>{{ c['phone'] }}</td>
             <td>{{ c['department'] }}</td>
             <td>{{ c['contact_person'] }}</td>
+            <td>{{ c['assigned_to'] }}</td>
             <td><span class="status status-{{ c['status'] }}">{{ c['status'] }}</span></td>
             <td>{{ c['memo'] }}</td>
             <td class="actions">

@@ -113,6 +113,22 @@ th {
     font-weight: 600;
 }
 
+.col-company {
+    min-width: 220px;
+}
+
+.google-link {
+    margin-left: 8px;
+    font-size: 0.8rem;
+    color: #2d6cdf;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.google-link:hover {
+    text-decoration: underline;
+}
+
 .actions {
     display: flex;
     gap: 8px;
