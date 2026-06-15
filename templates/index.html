@@ -5,7 +5,7 @@
     <form method="get" action="{{ url_for('index') }}">
         <div class="filter-row">
             <label>キーワード
-                <input type="text" name="keyword" value="{{ filters.get('keyword', '') }}" placeholder="会社名・担当者名">
+                <input type="text" name="keyword" value="{{ filters.get('keyword', '') }}" placeholder="会社名">
             </label>
 
             <label>業種
@@ -92,7 +92,6 @@
             <th>従業員数</th>
             <th>電話番号</th>
             <th>部署</th>
-            <th>担当者</th>
             <th>当社担当者</th>
             <th>状況</th>
             <th>最新訪問日</th>
@@ -114,7 +113,6 @@
             <td>{{ c['employees'] }}</td>
             <td>{{ c['phone'] }}</td>
             <td>{{ c['department'] }}</td>
-            <td>{{ c['contact_person'] }}</td>
             <td>{{ c['assigned_to'] or '' }}</td>
             <td><span class="status status-{{ c['status'] }}">{{ c['status'] }}</span></td>
             <td>{{ c['last_visit_date'] or '' }}</td>

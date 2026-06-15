@@ -56,12 +56,6 @@ COMPANY_PREFIXES = ["株式会社", "有限会社", "合同会社"]
 
 DEPARTMENTS = ["営業部", "総務部", "企画部", "管理部", "経営企画部", "購買部", "代表"]
 
-SURNAMES = ["佐藤", "鈴木", "高橋", "田中", "渡辺", "伊藤", "山本", "中村", "小林", "加藤",
-            "吉田", "山田", "佐々木", "山口", "松本", "井上", "木村", "林", "斎藤", "清水"]
-
-GIVEN_NAMES = ["太郎", "次郎", "一郎", "健", "誠", "大輔", "翔", "陽介", "花子", "美咲",
-               "愛", "葵", "裕子", "ゆり", "直樹", "慎太郎", "拓也", "明", "悠斗", "さくら"]
-
 # 都道府県ごとの代表的な市外局番(デモ用の電話番号生成に使用)
 AREA_CODES = {
     "北海道": "011", "青森県": "017", "岩手県": "019", "宮城県": "022", "秋田県": "018",
@@ -115,7 +109,6 @@ def generate_sample_companies(industry, prefecture, municipality, count):
                 "employees": random.choice([5, 10, 20, 30, 50, 80, 120, 200, 350, 500]),
                 "phone": _generate_phone(prefecture),
                 "department": random.choice(DEPARTMENTS),
-                "contact_person": random.choice(SURNAMES) + random.choice(GIVEN_NAMES),
                 "status": "未架電",
                 "memo": "自動収集(サンプルデータ)",
             }
@@ -195,17 +188,12 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
         corporate_number = item.get("corporate_number", "")
 
         employees = None
-        contact_person = ""
         department = ""
         actual_industry = "業種不明(要確認)"
         memo_parts = [f"自動収集(gBizINFO) 法人番号:{corporate_number}"]
 
         if detail:
             employees = detail.get("employee_number")
-            representative_name = (detail.get("representative_name") or "").strip()
-            if representative_name:
-                # 「姓　名」の全角スペースを半角スペースに統一
-                contact_person = re.sub(r"[\s　]+", " ", representative_name)
             department = (detail.get("representative_position") or "").strip()
             business_summary = detail.get("business_summary")
             if business_summary:
@@ -227,7 +215,6 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
                 "employees": employees,
                 "phone": "",
                 "department": department,
-                "contact_person": contact_person,
                 "status": "未架電",
                 "memo": " / ".join(memo_parts),
             }
