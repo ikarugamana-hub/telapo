@@ -30,6 +30,103 @@ main {
     margin: 0 auto;
 }
 
+.progress-panel {
+    background: #fff;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 16px;
+}
+
+.progress-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.progress-header h2 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+}
+
+.progress-header p,
+.progress-stats {
+    margin: 0;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.progress-updated {
+    white-space: nowrap;
+}
+
+.progress-bar,
+.progress-mini-bar {
+    background: #e7ebf0;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 12px;
+    margin: 14px 0 10px;
+}
+
+.progress-bar div,
+.progress-mini-bar div {
+    height: 100%;
+    background: #2d6cdf;
+    border-radius: inherit;
+    transition: width 0.2s ease;
+}
+
+.progress-stats {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.progress-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.progress-prefecture {
+    border: 1px solid #d9e0ea;
+    border-radius: 6px;
+    padding: 8px;
+    background: #fafbfc;
+}
+
+.progress-prefecture.active {
+    border-color: #2d6cdf;
+    background: #eef5ff;
+}
+
+.progress-prefecture.completed {
+    border-color: #bdd9c4;
+    background: #f3fbf5;
+}
+
+.progress-prefecture strong,
+.progress-prefecture span {
+    display: block;
+    font-size: 0.85rem;
+}
+
+.progress-prefecture span {
+    color: #666;
+    margin-top: 2px;
+}
+
+.progress-mini-bar {
+    height: 5px;
+    margin-top: 7px;
+}
+
 .filter-box {
     background: #fff;
     padding: 16px;

@@ -1,6 +1,24 @@
 {% extends "base.html" %}
 {% block content %}
 
+<section class="progress-panel" data-progress-panel>
+    <div class="progress-header">
+        <div>
+            <h2>収集進捗</h2>
+            <p data-progress-current>読み込み中...</p>
+        </div>
+        <p class="progress-updated" data-progress-updated></p>
+    </div>
+    <div class="progress-bar" aria-label="収集進捗">
+        <div data-progress-bar></div>
+    </div>
+    <div class="progress-stats">
+        <span data-progress-total></span>
+        <span data-progress-prefectures></span>
+    </div>
+    <div class="progress-grid" data-progress-grid></div>
+</section>
+
 <section class="filter-box">
     <form method="get" action="{{ url_for('index') }}">
         <div class="filter-row">
@@ -159,6 +177,7 @@
 </div>
 
 <script src="{{ url_for('static', filename='cascade.js') }}"></script>
+<script src="{{ url_for('static', filename='progress.js') }}"></script>
 <script>
     setupCascadingSelect('filter-prefecture', 'filter-municipality', {{ (filters.get('municipality') or '') | tojson }}, 'すべて');
 </script>

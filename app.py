@@ -11,7 +11,7 @@ from flask import Flask, g, jsonify, redirect, render_template, request, send_fi
 
 load_dotenv()
 
-from collector import INDUSTRY_CHOICES, collect_companies
+from collector import INDUSTRY_CHOICES, PREFECTURE_CODES, collect_companies
 
 app = Flask(__name__)
 
@@ -26,6 +26,7 @@ SORT_OPTIONS = {
 }
 
 PER_PAGE = 100
+COLLECTION_TARGET_PER_PREFECTURE = 10_000
 
 
 def get_db_connection():
@@ -371,6 +372,64 @@ def api_count():
     else:
         row = db.execute("SELECT COUNT(*) AS cnt FROM companies").fetchone()
     return jsonify({"count": row["cnt"]})
+
+
+@app.route("/api/progress")
+def api_progress():
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT prefecture, COUNT(*) AS cnt
+        FROM companies
+        WHERE prefecture IS NOT NULL AND prefecture != ''
+        GROUP BY prefecture
+        """
+    ).fetchall()
+    counts = {r["prefecture"]: int(r["cnt"]) for r in rows}
+    latest = db.execute(
+        """
+        SELECT prefecture, municipality
+        FROM companies
+        WHERE prefecture IS NOT NULL AND prefecture != ''
+        ORDER BY id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+
+    prefectures = []
+    collected_total = 0
+    capped_total = 0
+    completed_count = 0
+    for prefecture in PREFECTURE_CODES.keys():
+        count = counts.get(prefecture, 0)
+        collected_total += count
+        capped_count = min(count, COLLECTION_TARGET_PER_PREFECTURE)
+        capped_total += capped_count
+        if count >= COLLECTION_TARGET_PER_PREFECTURE:
+            completed_count += 1
+        prefectures.append(
+            {
+                "name": prefecture,
+                "count": count,
+                "target": COLLECTION_TARGET_PER_PREFECTURE,
+                "percent": round(capped_count / COLLECTION_TARGET_PER_PREFECTURE * 100, 1),
+                "completed": count >= COLLECTION_TARGET_PER_PREFECTURE,
+            }
+        )
+
+    target_total = len(prefectures) * COLLECTION_TARGET_PER_PREFECTURE
+    overall_percent = round(capped_total / target_total * 100, 1) if target_total else 0
+    return jsonify(
+        {
+            "total": collected_total,
+            "target_total": target_total,
+            "overall_percent": overall_percent,
+            "completed_prefectures": completed_count,
+            "prefecture_total": len(prefectures),
+            "latest": latest or {},
+            "prefectures": prefectures,
+        }
+    )
 
 
 @app.route("/collect", methods=["GET", "POST"])
