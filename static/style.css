@@ -377,11 +377,10 @@ td .number-input {
 }
 
 .status-未架電 { background: #e0e0e0; color: #555; }
-.status-架電中 { background: #fff3cd; color: #856404; }
-.status-通話済み { background: #d1ecf1; color: #0c5460; }
-.status-アポ獲得 { background: #d4edda; color: #155724; }
-.status-NG { background: #f8d7da; color: #721c24; }
-.status-不通 { background: #ddd; color: #555; }
+.status-資料送付 { background: #d1ecf1; color: #0c5460; }
+.status-成約 { background: #d4edda; color: #155724; }
+.status-失注 { background: #f8d7da; color: #721c24; }
+.status-既存 { background: #e6f4ea; color: #19692c; }
 
 tr.reminder-due {
     background: #fff0f0;

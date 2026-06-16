@@ -16,7 +16,26 @@ from collector import INDUSTRY_CHOICES, PREFECTURE_CODES, collect_companies
 
 app = Flask(__name__)
 
-STATUS_CHOICES = ["未架電", "架電中", "通話済み", "アポ獲得", "NG", "不通"]
+STATUS_CHOICES = [
+    "未架電",
+    "資料送付",
+    "訪問/面談",
+    "引合/見積",
+    "成約",
+    "失注",
+    "ﾍﾟﾝﾃﾞｨﾝｸﾞ",
+    "難攻/NG",
+    "HPｴﾝﾄﾘｰ",
+    "既存",
+    "不在/再TEL",
+]
+STATUS_MIGRATIONS = {
+    "架電中": "不在/再TEL",
+    "通話済み": "資料送付",
+    "アポ獲得": "訪問/面談",
+    "NG": "難攻/NG",
+    "不通": "不在/再TEL",
+}
 ASSIGNED_TO_CHOICES = [f"営業{i}部" for i in range(1, 8)]
 CSV_COLUMNS = [
     "ID",
@@ -135,6 +154,8 @@ def init_db():
         db.execute(f"ALTER TABLE companies ADD COLUMN IF NOT EXISTS {column} {col_type}")
 
     db.execute("ALTER TABLE companies DROP COLUMN IF EXISTS contact_person")
+    for old_status, new_status in STATUS_MIGRATIONS.items():
+        db.execute("UPDATE companies SET status=? WHERE status=?", (new_status, old_status))
 
     count = db.execute("SELECT COUNT(*) AS cnt FROM companies").fetchone()["cnt"]
     if count == 0:
@@ -258,6 +279,10 @@ def get_row_value(row, *names):
 
 
 def normalize_csv_row(row):
+    status = get_row_value(row, "状況", "status") or "未架電"
+    status = STATUS_MIGRATIONS.get(status, status)
+    if status not in STATUS_CHOICES:
+        status = "未架電"
     return {
         "company_name": get_row_value(row, "会社名", "company_name"),
         "industry": get_row_value(row, "業種", "industry"),
@@ -268,7 +293,7 @@ def normalize_csv_row(row):
         "department": get_row_value(row, "部署", "department"),
         "sales_department": get_row_value(row, "営業部", "sales_department"),
         "assigned_to": get_row_value(row, "当社担当者", "assigned_to"),
-        "status": get_row_value(row, "状況", "status") or "未架電",
+        "status": status,
         "last_approach_date": get_row_value(row, "最終アプローチ日", "last_approach_date"),
         "memo": get_row_value(row, "メモ", "memo"),
     }
