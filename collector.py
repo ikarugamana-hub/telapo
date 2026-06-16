@@ -26,7 +26,6 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 ANTHROPIC_MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
-MAX_INDUSTRY_CHARS = 10
 ANTHROPIC_SUMMARY_WORKERS = 5
 
 # 株式会社・有限会社・合名会社・合資会社・合同会社
@@ -58,7 +57,72 @@ INDUSTRY_KEYWORDS = {
     "その他": ["商会", "企画", "事務所"],
 }
 
-INDUSTRY_CHOICES = list(INDUSTRY_KEYWORDS.keys())
+STANDARD_INDUSTRY_CATEGORIES = [
+    "ゲームセンター",
+    "ボウリング場",
+    "ｲﾝﾀｰﾈｯﾄｶﾌｪ",
+    "遊園地",
+    "ｺﾞﾙﾌ場",
+    "ｶﾀﾛｸﾞﾒｰｶｰ",
+    "ﾍﾟｯﾄｼｮｯﾌﾟ",
+    "ﾍﾞｰｶﾘｰ・ｹｰｷ",
+    "飲食",
+    "カフェ",
+    "居酒屋",
+    "カラオケ",
+    "事務",
+    "小売業",
+    "物販",
+    "卸売業",
+    "書店",
+    "アパレル",
+    "清掃・設備",
+    "警備",
+    "建設・建築",
+    "工事",
+    "製造",
+    "自動車（整備・販売）",
+    "リサイクル業",
+    "運輸・倉庫",
+    "ｻｰﾋﾞｽ業",
+    "電気・ｶﾞｽ・水道業",
+    "消防",
+    "ホテル",
+    "ホテル（飲食）",
+    "ホテル（ｻｰﾋﾞｽ）",
+    "ﾊﾞｽｶﾞｲﾄﾞ・運転手",
+    "温浴施設",
+    "ｴｽﾃ・美容",
+    "ブライダル",
+    "葬祭業",
+    "人材派遣",
+    "代理店",
+    "広告代理店",
+    "食品工場",
+    "その他工場",
+    "ｸﾘｰﾆﾝｸﾞ工場",
+    "飲料メーカー",
+    "製薬会社",
+    "病院",
+    "歯科医院",
+    "ﾄﾞﾗｯｸﾞｽﾄｱ・薬局",
+    "健診センター",
+    "クリニック",
+    "臨床検査",
+    "学校",
+    "教習所",
+    "施設・介護",
+    "不動産業",
+    "不明",
+    "金融",
+    "JA",
+    "システム",
+    "開発",
+    "スーパー",
+    "商社",
+]
+
+INDUSTRY_CHOICES = STANDARD_INDUSTRY_CATEGORIES
 
 COMPANY_PREFIXES = ["株式会社", "有限会社", "合同会社"]
 
@@ -94,38 +158,48 @@ def _generate_phone(prefecture):
     return f"{area_code}-{local}-{number}"
 
 
-def _clean_industry_label(label):
-    label = re.sub(r"[\s　、。・/／]+", "", (label or "").strip().strip("「」『』\"'"))
-    return label[:MAX_INDUSTRY_CHARS] if label else "業種不明"
+def _normalize_claude_category(label):
+    label = (label or "").strip().strip("「」『』\"'`")
+    label = re.sub(r"^(分類|業種|カテゴリ)[:：]\s*", "", label)
+    first_line = label.splitlines()[0].strip() if label else ""
+    if first_line in STANDARD_INDUSTRY_CATEGORIES:
+        return first_line
+    for category in STANDARD_INDUSTRY_CATEGORIES:
+        if category in label:
+            return category
+    return "不明"
 
 
 @lru_cache(maxsize=2048)
 def summarize_industry_with_claude(business_summary):
-    """gBizINFOの事業概要をClaude Haikuで10文字以内の業種名に要約する。"""
+    """gBizINFOの事業概要をClaude Haikuで標準業種カテゴリへ分類する。"""
     business_summary = (business_summary or "").strip()
     if not business_summary:
-        return "業種不明"
-    if len(business_summary) <= MAX_INDUSTRY_CHARS:
+        return "不明"
+    if business_summary in STANDARD_INDUSTRY_CATEGORIES:
         return business_summary
     if not ANTHROPIC_API_KEY:
-        return _clean_industry_label(business_summary)
+        return "不明"
+
+    category_list = "\n".join(f"- {category}" for category in STANDARD_INDUSTRY_CATEGORIES)
 
     payload = {
         "model": ANTHROPIC_MODEL,
         "max_tokens": 32,
         "temperature": 0,
-        "system": "あなたはB2B営業リスト用の業種分類器です。回答は日本語の業種名だけにしてください。",
+        "system": "あなたはB2B営業リスト用の業種分類器です。必ず指定カテゴリの中から最も近いものを1つだけ返します。",
         "messages": [
             {
                 "role": "user",
                 "content": (
-                    "次の事業概要を、営業リストの「業種」欄に入れる短い業種名へ要約してください。\n"
+                    "次の情報を、営業リストの「業種」欄に入れるカテゴリへ分類してください。\n"
                     "条件:\n"
-                    "- 10文字以内\n"
-                    "- 会社名ではなく業種名\n"
-                    "- 説明文、句読点、引用符は不要\n"
-                    "- 判断できない場合は「業種不明」\n\n"
-                    f"事業概要: {business_summary}"
+                    "- 必ず下記カテゴリ一覧から最も近いものを1つ選ぶ\n"
+                    "- 完全一致がない場合も似ているものへ寄せる\n"
+                    "- どうしても判断不能な場合だけ「不明」\n"
+                    "- 回答はカテゴリ名のみ。説明、句読点、引用符は不要\n\n"
+                    f"カテゴリ一覧:\n{category_list}\n\n"
+                    f"分類対象: {business_summary}"
                 ),
             }
         ],
@@ -143,10 +217,10 @@ def summarize_industry_with_claude(business_summary):
         response.raise_for_status()
         content = response.json().get("content", [])
         if content and content[0].get("type") == "text":
-            return _clean_industry_label(content[0].get("text", ""))
+            return _normalize_claude_category(content[0].get("text", ""))
     except requests.RequestException:
         pass
-    return _clean_industry_label(business_summary)
+    return "不明"
 
 
 def generate_sample_companies(industry, prefecture, municipality, count):
@@ -291,7 +365,7 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
 
         employees = None
         department = ""
-        actual_industry = "業種不明(要確認)"
+        actual_industry = "不明"
         memo_parts = [f"自動収集(gBizINFO) 法人番号:{corporate_number}"]
 
         if detail:
