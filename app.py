@@ -36,7 +36,71 @@ STATUS_MIGRATIONS = {
     "NG": "難攻/NG",
     "不通": "不在/再TEL",
 }
-ASSIGNED_TO_CHOICES = [f"営業{i}部" for i in range(1, 8)]
+SALES_REP_CHOICES = [
+    "藤田　慎也",
+    "佐藤　正樹",
+    "山田　英男",
+    "野澤　松人",
+    "永濵　紀仁",
+    "髙杉　昌郎",
+    "小島　美紀",
+    "伊藤　富雄",
+    "青　武伸",
+    "大槻　勝己",
+    "神野　訓",
+    "佐藤　和憲",
+    "井上　英史",
+    "山根　直樹",
+    "古島　健",
+    "山﨑　高光",
+    "曽谷　太郎",
+    "関塚　良幸",
+    "成田　良平",
+    "佐々木　功朗",
+    "梶本　秀樹",
+    "甲斐　浩介",
+    "橋田　知穂",
+    "中西　宏文",
+    "宮本　憲一朗",
+    "久須美　秀樹",
+    "鶴巻　学",
+    "小林　雅裕",
+    "吉田　和泉",
+    "佐藤　元治",
+    "倉光　隆尚",
+    "中川　一彦",
+    "中島　祐典",
+    "加藤　陽介",
+    "八重樫　千佳江",
+    "齋藤　加奈子",
+    "山根　伊佐夫",
+    "藤田　光",
+    "大庭　拓真",
+    "米倉　和馬",
+    "河地　明衣",
+    "山田　優介",
+    "営業２部新規予定",
+    "檜田　早由歌",
+    "井上　永矢",
+]
+SALES_DEPARTMENT_CHOICES = [
+    "営業本部/営業１部",
+    "営業本部/営業２部",
+    "営業本部/営業３部",
+    "営業本部/営業４部",
+    "営業本部/営業６部",
+    "営業本部/営業７部",
+]
+LEGACY_ASSIGNED_TO_DEPARTMENT_MIGRATIONS = {
+    "営業1部": "営業本部/営業１部",
+    "営業2部": "営業本部/営業２部",
+    "営業3部": "営業本部/営業３部",
+    "営業4部": "営業本部/営業４部",
+    "営業5部": "営業本部/営業５部",
+    "営業6部": "営業本部/営業６部",
+    "営業7部": "営業本部/営業７部",
+}
+ASSIGNED_TO_CHOICES = SALES_REP_CHOICES
 CSV_COLUMNS = [
     "ID",
     "会社名",
@@ -156,6 +220,16 @@ def init_db():
     db.execute("ALTER TABLE companies DROP COLUMN IF EXISTS contact_person")
     for old_status, new_status in STATUS_MIGRATIONS.items():
         db.execute("UPDATE companies SET status=? WHERE status=?", (new_status, old_status))
+    for old_value, sales_department in LEGACY_ASSIGNED_TO_DEPARTMENT_MIGRATIONS.items():
+        db.execute(
+            """
+            UPDATE companies
+            SET sales_department=?, assigned_to=''
+            WHERE assigned_to=?
+              AND (sales_department IS NULL OR sales_department='')
+            """,
+            (sales_department, old_value),
+        )
 
     count = db.execute("SELECT COUNT(*) AS cnt FROM companies").fetchone()["cnt"]
     if count == 0:
@@ -416,6 +490,7 @@ def index():
         municipalities=municipalities,
         statuses=STATUS_CHOICES,
         assigned_to_choices=ASSIGNED_TO_CHOICES,
+        sales_department_choices=SALES_DEPARTMENT_CHOICES,
         sort_options=SORT_OPTIONS,
         current_sort=sort,
         filters=request.args,
@@ -439,7 +514,14 @@ def add():
         db.commit()
         return redirect(url_for("index"))
 
-    return render_template("form.html", company=None, statuses=STATUS_CHOICES, industries=INDUSTRY_CHOICES, assigned_to_choices=ASSIGNED_TO_CHOICES)
+    return render_template(
+        "form.html",
+        company=None,
+        statuses=STATUS_CHOICES,
+        industries=INDUSTRY_CHOICES,
+        assigned_to_choices=ASSIGNED_TO_CHOICES,
+        sales_department_choices=SALES_DEPARTMENT_CHOICES,
+    )
 
 
 @app.route("/edit/<int:company_id>", methods=["GET", "POST"])
@@ -451,7 +533,14 @@ def edit(company_id):
         return redirect(url_for("index"))
 
     company = db.execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
-    return render_template("form.html", company=company, statuses=STATUS_CHOICES, industries=INDUSTRY_CHOICES, assigned_to_choices=ASSIGNED_TO_CHOICES)
+    return render_template(
+        "form.html",
+        company=company,
+        statuses=STATUS_CHOICES,
+        industries=INDUSTRY_CHOICES,
+        assigned_to_choices=ASSIGNED_TO_CHOICES,
+        sales_department_choices=SALES_DEPARTMENT_CHOICES,
+    )
 
 
 @app.route("/inline-update/<int:company_id>", methods=["POST"])
@@ -673,6 +762,7 @@ def collect():
         "collect.html",
         industries=INDUSTRY_CHOICES,
         assigned_to_choices=ASSIGNED_TO_CHOICES,
+        sales_department_choices=SALES_DEPARTMENT_CHOICES,
         using_real_api=bool(os.environ.get("GBIZINFO_API_TOKEN")),
     )
 

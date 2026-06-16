@@ -162,7 +162,14 @@
             <td><input form="row-form-{{ c['id'] }}" class="number-input" type="number" name="employees" value="{{ c['employees'] if c['employees'] is not none else '' }}" min="0"></td>
             <td><input form="row-form-{{ c['id'] }}" type="text" name="phone" value="{{ c['phone'] or '' }}"></td>
             <td><input form="row-form-{{ c['id'] }}" type="text" name="department" value="{{ c['department'] or '' }}"></td>
-            <td><input form="row-form-{{ c['id'] }}" type="text" name="sales_department" value="{{ c['sales_department'] or '' }}"></td>
+            <td>
+                <select form="row-form-{{ c['id'] }}" name="sales_department">
+                    <option value="">未選択</option>
+                    {% for dept in sales_department_choices %}
+                    <option value="{{ dept }}" {% if c['sales_department'] == dept %}selected{% endif %}>{{ dept }}</option>
+                    {% endfor %}
+                </select>
+            </td>
             <td>
                 <select form="row-form-{{ c['id'] }}" name="assigned_to">
                     <option value="">未割り当て</option>

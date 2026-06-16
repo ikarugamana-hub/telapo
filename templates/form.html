@@ -45,7 +45,12 @@
     </label>
 
     <label>営業部
-        <input type="text" name="sales_department" value="{{ company['sales_department'] if company else '' }}">
+        <select name="sales_department">
+            <option value="">未選択</option>
+            {% for dept in sales_department_choices %}
+            <option value="{{ dept }}" {% if company and company['sales_department'] == dept %}selected{% endif %}>{{ dept }}</option>
+            {% endfor %}
+        </select>
     </label>
 
     <label>当社担当者
