@@ -80,7 +80,22 @@
     </form>
 </section>
 
-<p class="result-count">該当件数: {{ total }} 件</p>
+<div class="result-summary">
+    <p class="result-count">該当件数: {{ total }} 件{% if total %} / {{ start_item }}〜{{ end_item }} 件目を表示{% endif %}</p>
+    <nav class="pagination" aria-label="ページ切り替え">
+        {% if prev_page_args %}
+        <a href="{{ url_for('index', **prev_page_args) }}">前の100件</a>
+        {% else %}
+        <span class="disabled">前の100件</span>
+        {% endif %}
+        <span>{{ page }} / {{ total_pages }} ページ</span>
+        {% if next_page_args %}
+        <a href="{{ url_for('index', **next_page_args) }}">次の100件</a>
+        {% else %}
+        <span class="disabled">次の100件</span>
+        {% endif %}
+    </nav>
+</div>
 
 <table>
     <thead>
@@ -128,6 +143,20 @@
         {% endfor %}
     </tbody>
 </table>
+
+<div class="pagination pagination-bottom" aria-label="ページ切り替え">
+    {% if prev_page_args %}
+    <a href="{{ url_for('index', **prev_page_args) }}">前の100件</a>
+    {% else %}
+    <span class="disabled">前の100件</span>
+    {% endif %}
+    <span>{{ page }} / {{ total_pages }} ページ</span>
+    {% if next_page_args %}
+    <a href="{{ url_for('index', **next_page_args) }}">次の100件</a>
+    {% else %}
+    <span class="disabled">次の100件</span>
+    {% endif %}
+</div>
 
 <script src="{{ url_for('static', filename='cascade.js') }}"></script>
 <script>

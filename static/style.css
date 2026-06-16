@@ -87,9 +87,50 @@ main {
     font-weight: bold;
 }
 
+.result-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+}
+
 .result-count {
     margin: 8px 0;
     color: #555;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.pagination a,
+.pagination .disabled {
+    padding: 6px 10px;
+    border-radius: 4px;
+    text-decoration: none;
+}
+
+.pagination a {
+    color: #2d6cdf;
+    background: #fff;
+    border: 1px solid #cfd8e3;
+}
+
+.pagination .disabled {
+    color: #999;
+    background: #eee;
+    border: 1px solid #ddd;
+}
+
+.pagination-bottom {
+    justify-content: flex-end;
+    margin-top: 16px;
 }
 
 table {

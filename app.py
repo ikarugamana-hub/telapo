@@ -25,6 +25,8 @@ SORT_OPTIONS = {
     "company_name": ("company_name", "ASC", "会社名順"),
 }
 
+PER_PAGE = 100
+
 
 def get_db_connection():
     """Cloud SQL (PostgreSQL) への接続を作成する。
@@ -194,18 +196,43 @@ def build_filters(args):
     return where, params
 
 
+def get_current_page(args):
+    try:
+        return max(1, int(args.get("page", 1)))
+    except ValueError:
+        return 1
+
+
+def page_url_args(page):
+    args = request.args.to_dict(flat=True)
+    args["page"] = page
+    return args
+
+
 @app.route("/")
 def index():
     db = get_db()
     where, params = build_filters(request.args)
+    page = get_current_page(request.args)
 
     sort = request.args.get("sort", "id_desc")
     if sort not in SORT_OPTIONS:
         sort = "id_desc"
     sort_column, sort_dir, _ = SORT_OPTIONS[sort]
 
+    total = db.execute(f"SELECT COUNT(*) AS cnt FROM companies {where}", params).fetchone()["cnt"]
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * PER_PAGE
+
     rows = db.execute(
-        f"SELECT * FROM companies {where} ORDER BY {sort_column} {sort_dir}, id DESC", params
+        f"""
+        SELECT * FROM companies {where}
+        ORDER BY {sort_column} {sort_dir}, id DESC
+        LIMIT ? OFFSET ?
+        """,
+        params + [PER_PAGE, offset],
     ).fetchall()
 
     industries = [r["industry"] for r in db.execute("SELECT DISTINCT industry FROM companies ORDER BY industry").fetchall()]
@@ -223,7 +250,14 @@ def index():
         sort_options=SORT_OPTIONS,
         current_sort=sort,
         filters=request.args,
-        total=len(rows),
+        total=total,
+        page=page,
+        per_page=PER_PAGE,
+        total_pages=total_pages,
+        start_item=offset + 1 if total else 0,
+        end_item=min(offset + len(rows), total),
+        prev_page_args=page_url_args(page - 1) if page > 1 else None,
+        next_page_args=page_url_args(page + 1) if page < total_pages else None,
         today=date.today().isoformat(),
     )
 
