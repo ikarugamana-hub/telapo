@@ -15,12 +15,18 @@ import os
 import random
 import re
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pathlib import Path
 
 import requests
 
 GBIZINFO_API_TOKEN = os.environ.get("GBIZINFO_API_TOKEN")
 GBIZINFO_ENDPOINT = "https://info.gbiz.go.jp/hojin/v1/hojin"
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+ANTHROPIC_MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
+MAX_INDUSTRY_CHARS = 10
 
 # 株式会社・有限会社・合名会社・合資会社・合同会社
 GBIZINFO_CORPORATE_TYPES = "301,302,303,304,305"
@@ -85,6 +91,61 @@ def _generate_phone(prefecture):
     local = random.randint(100, 999)
     number = random.randint(1000, 9999)
     return f"{area_code}-{local}-{number}"
+
+
+def _clean_industry_label(label):
+    label = re.sub(r"[\s　、。・/／]+", "", (label or "").strip().strip("「」『』\"'"))
+    return label[:MAX_INDUSTRY_CHARS] if label else "業種不明"
+
+
+@lru_cache(maxsize=2048)
+def summarize_industry_with_claude(business_summary):
+    """gBizINFOの事業概要をClaude Haikuで10文字以内の業種名に要約する。"""
+    business_summary = (business_summary or "").strip()
+    if not business_summary:
+        return "業種不明"
+    if len(business_summary) <= MAX_INDUSTRY_CHARS:
+        return business_summary
+    if not ANTHROPIC_API_KEY:
+        return _clean_industry_label(business_summary)
+
+    payload = {
+        "model": ANTHROPIC_MODEL,
+        "max_tokens": 32,
+        "temperature": 0,
+        "system": "あなたはB2B営業リスト用の業種分類器です。回答は日本語の業種名だけにしてください。",
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "次の事業概要を、営業リストの「業種」欄に入れる短い業種名へ要約してください。\n"
+                    "条件:\n"
+                    "- 10文字以内\n"
+                    "- 会社名ではなく業種名\n"
+                    "- 説明文、句読点、引用符は不要\n"
+                    "- 判断できない場合は「業種不明」\n\n"
+                    f"事業概要: {business_summary}"
+                ),
+            }
+        ],
+    }
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "content-type": "application/json",
+    }
+
+    try:
+        response = requests.post(
+            ANTHROPIC_MESSAGES_ENDPOINT, headers=headers, json=payload, timeout=20
+        )
+        response.raise_for_status()
+        content = response.json().get("content", [])
+        if content and content[0].get("type") == "text":
+            return _clean_industry_label(content[0].get("text", ""))
+    except requests.RequestException:
+        pass
+    return _clean_industry_label(business_summary)
 
 
 def generate_sample_companies(industry, prefecture, municipality, count):
@@ -220,8 +281,8 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
             department = (detail.get("representative_position") or "").strip()
             business_summary = detail.get("business_summary")
             if business_summary:
-                # gBizINFOは業種(日本標準産業分類)を返さないため、事業概要を業種欄の代わりに表示する
-                actual_industry = business_summary
+                actual_industry = summarize_industry_with_claude(business_summary)
+                memo_parts.append(f"事業概要:{business_summary}")
             company_url = detail.get("company_url")
             if company_url:
                 memo_parts.append(f"URL:{company_url}")
