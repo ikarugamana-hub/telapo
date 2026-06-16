@@ -27,6 +27,7 @@ ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 ANTHROPIC_MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 MAX_INDUSTRY_CHARS = 10
+ANTHROPIC_SUMMARY_WORKERS = 5
 
 # 株式会社・有限会社・合名会社・合資会社・合同会社
 GBIZINFO_CORPORATE_TYPES = "301,302,303,304,305"
@@ -267,8 +268,25 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
     # 従業員数が判明している企業を優先(従業員数の多い順)し、不明な企業は最後に回す
     detailed.sort(key=lambda pair: pair[1].get("employee_number") if pair[1] and pair[1].get("employee_number") is not None else -1, reverse=True)
 
+    selected = detailed[:count]
+    business_summaries = {
+        pair[1].get("business_summary")
+        for pair in selected
+        if pair[1] and pair[1].get("business_summary")
+    }
+    if business_summaries:
+        with ThreadPoolExecutor(max_workers=ANTHROPIC_SUMMARY_WORKERS) as executor:
+            industry_summaries = dict(
+                zip(
+                    business_summaries,
+                    executor.map(summarize_industry_with_claude, business_summaries),
+                )
+            )
+    else:
+        industry_summaries = {}
+
     companies = []
-    for item, detail in detailed[:count]:
+    for item, detail in selected:
         corporate_number = item.get("corporate_number", "")
 
         employees = None
@@ -281,7 +299,9 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
             department = (detail.get("representative_position") or "").strip()
             business_summary = detail.get("business_summary")
             if business_summary:
-                actual_industry = summarize_industry_with_claude(business_summary)
+                actual_industry = industry_summaries.get(
+                    business_summary, summarize_industry_with_claude(business_summary)
+                )
                 memo_parts.append(f"事業概要:{business_summary}")
             company_url = detail.get("company_url")
             if company_url:
