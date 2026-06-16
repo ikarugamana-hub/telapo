@@ -110,8 +110,6 @@ CSV_COLUMNS = [
     "都道府県",
     "市区町村",
     "従業員数",
-    "電話番号",
-    "部署",
     "営業部",
     "当社担当者",
     "状況",
@@ -353,8 +351,6 @@ def normalize_csv_row(row):
         "prefecture": get_row_value(row, "都道府県", "prefecture"),
         "municipality": get_row_value(row, "市区町村", "municipality"),
         "employees": parse_optional_int(get_row_value(row, "従業員数", "employees")),
-        "phone": get_row_value(row, "電話番号", "phone"),
-        "department": get_row_value(row, "部署", "department"),
         "sales_department": get_row_value(row, "営業部", "sales_department"),
         "assigned_to": get_row_value(row, "当社担当者", "assigned_to"),
         "status": status,
@@ -394,8 +390,8 @@ def update_company(db, company_id, values):
     db.execute(
         """
         UPDATE companies
-        SET company_name=?, industry=?, prefecture=?, municipality=?, employees=?, phone=?,
-            department=?, sales_department=?, assigned_to=?, status=?, last_approach_date=?, memo=?
+        SET company_name=?, industry=?, prefecture=?, municipality=?, employees=?,
+            sales_department=?, assigned_to=?, status=?, last_approach_date=?, memo=?
         WHERE id=?
         """,
         (
@@ -404,8 +400,6 @@ def update_company(db, company_id, values):
             values["prefecture"],
             values["municipality"],
             values["employees"],
-            values["phone"],
-            values["department"],
             values["sales_department"],
             values["assigned_to"],
             values["status"],
@@ -420,9 +414,9 @@ def insert_company(db, values):
     db.execute(
         """
         INSERT INTO companies
-            (company_name, industry, prefecture, municipality, employees, phone,
-             department, sales_department, assigned_to, status, last_approach_date, memo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (company_name, industry, prefecture, municipality, employees,
+             sales_department, assigned_to, status, last_approach_date, memo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             values["company_name"],
@@ -430,8 +424,6 @@ def insert_company(db, values):
             values["prefecture"],
             values["municipality"],
             values["employees"],
-            values["phone"],
-            values["department"],
             values["sales_department"],
             values["assigned_to"],
             values["status"],
@@ -571,8 +563,6 @@ def export():
                 r["prefecture"],
                 r["municipality"],
                 r["employees"],
-                r["phone"],
-                r["department"],
                 r["sales_department"],
                 r["assigned_to"],
                 r["status"],

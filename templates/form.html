@@ -36,14 +36,6 @@
         <input type="number" name="employees" value="{{ company['employees'] if company else '' }}" min="0">
     </label>
 
-    <label>電話番号
-        <input type="text" name="phone" value="{{ company['phone'] if company else '' }}">
-    </label>
-
-    <label>部署
-        <input type="text" name="department" value="{{ company['department'] if company else '' }}">
-    </label>
-
     <label>営業部
         <select name="sales_department">
             <option value="">未選択</option>

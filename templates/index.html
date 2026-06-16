@@ -139,8 +139,6 @@
             <th>都道府県</th>
             <th>市区町村</th>
             <th>従業員数</th>
-            <th>電話番号</th>
-            <th>部署</th>
             <th>営業部</th>
             <th>当社担当者</th>
             <th>状況</th>
@@ -160,8 +158,6 @@
             <td><input form="row-form-{{ c['id'] }}" type="text" name="prefecture" value="{{ c['prefecture'] or '' }}"></td>
             <td><input form="row-form-{{ c['id'] }}" type="text" name="municipality" value="{{ c['municipality'] or '' }}"></td>
             <td><input form="row-form-{{ c['id'] }}" class="number-input" type="number" name="employees" value="{{ c['employees'] if c['employees'] is not none else '' }}" min="0"></td>
-            <td><input form="row-form-{{ c['id'] }}" type="text" name="phone" value="{{ c['phone'] or '' }}"></td>
-            <td><input form="row-form-{{ c['id'] }}" type="text" name="department" value="{{ c['department'] or '' }}"></td>
             <td>
                 <select form="row-form-{{ c['id'] }}" name="sales_department">
                     <option value="">未選択</option>
