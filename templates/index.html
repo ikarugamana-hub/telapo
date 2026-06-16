@@ -79,6 +79,11 @@
                 <input type="number" name="employees_max" value="{{ filters.get('employees_max', '') }}" min="0">
             </label>
 
+            <label class="checkbox-label">
+                <input type="checkbox" name="hide_unknown_employees" value="1" {% if filters.get('hide_unknown_employees') == '1' %}checked{% endif %}>
+                従業員数未登録を表示しない
+            </label>
+
             <label>並び替え
                 <select name="sort">
                     {% for key, opt in sort_options.items() %}

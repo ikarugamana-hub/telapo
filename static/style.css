@@ -157,6 +157,17 @@ main {
     font-size: 0.9rem;
 }
 
+.filter-row .checkbox-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    min-height: 56px;
+}
+
+.filter-row .checkbox-label input {
+    width: auto;
+}
+
 .filter-actions {
     margin-top: 12px;
     display: flex;

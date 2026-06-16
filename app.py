@@ -23,6 +23,8 @@ SORT_OPTIONS = {
     "status": ("status", "ASC", "状況順"),
     "reminder_date": ("reminder_date", "ASC", "リマインダー日順"),
     "company_name": ("company_name", "ASC", "会社名順"),
+    "employees_asc": ("employees", "ASC", "従業員数 少ない順"),
+    "employees_desc": ("employees", "DESC", "従業員数 多い順"),
 }
 
 PER_PAGE = 100
@@ -191,6 +193,9 @@ def build_filters(args):
         conditions.append("employees <= ?")
         params.append(int(employees_max))
 
+    if args.get("hide_unknown_employees") == "1":
+        conditions.append("employees IS NOT NULL")
+
     where = ""
     if conditions:
         where = "WHERE " + " AND ".join(conditions)
@@ -220,6 +225,7 @@ def index():
     if sort not in SORT_OPTIONS:
         sort = "id_desc"
     sort_column, sort_dir, _ = SORT_OPTIONS[sort]
+    nulls_position = "NULLS LAST" if sort_column == "employees" else ""
 
     total = db.execute(f"SELECT COUNT(*) AS cnt FROM companies {where}", params).fetchone()["cnt"]
     total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
@@ -230,7 +236,7 @@ def index():
     rows = db.execute(
         f"""
         SELECT * FROM companies {where}
-        ORDER BY {sort_column} {sort_dir}, id DESC
+        ORDER BY {sort_column} {sort_dir} {nulls_position}, id DESC
         LIMIT ? OFFSET ?
         """,
         params + [PER_PAGE, offset],
