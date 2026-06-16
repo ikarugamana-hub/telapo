@@ -16,12 +16,13 @@ def main():
     db = Db(get_db_connection())
     rows = db.execute(
         """
-        SELECT id, industry, memo
+        SELECT industry, COUNT(*) AS cnt
         FROM companies
         WHERE industry IS NOT NULL
           AND industry != ''
           AND char_length(industry) > ?
-        ORDER BY id
+        GROUP BY industry
+        ORDER BY COUNT(*) DESC
         LIMIT ?
         """,
         (MAX_INDUSTRY_CHARS, BATCH_SIZE),
@@ -31,14 +32,26 @@ def main():
     for row in rows:
         original = row["industry"]
         summarized = summarize_industry_with_claude(original)
-        memo = row["memo"] or ""
-        if f"元業種:{original}" not in memo:
-            memo = f"{memo} / 元業種:{original}" if memo else f"元業種:{original}"
         db.execute(
-            "UPDATE companies SET industry=?, memo=? WHERE id=?",
-            (summarized, memo, row["id"]),
+            """
+            UPDATE companies
+            SET industry=?,
+                memo = CASE
+                    WHEN memo IS NULL OR memo = '' THEN ?
+                    WHEN memo NOT LIKE ? THEN memo || ?
+                    ELSE memo
+                END
+            WHERE industry=?
+            """,
+            (
+                summarized,
+                f"元業種:{original}",
+                f"%元業種:{original}%",
+                f" / 元業種:{original}",
+                original,
+            ),
         )
-        updated += 1
+        updated += int(row["cnt"])
 
     db.commit()
     db.close()
