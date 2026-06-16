@@ -14,6 +14,7 @@ import json
 import os
 import random
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
@@ -132,13 +133,23 @@ def _fetch_gbizinfo_detail(corporate_number, headers):
         return None
 
 
+# 1ページあたりの取得件数(APIの上限)
+GBIZINFO_PAGE_LIMIT = 100
+# 1回の収集で走査するページ数の上限(これを超えて候補を探さない)
+GBIZINFO_MAX_PAGES = 10
+# 詳細API(従業員数等)を問い合わせる候補数の上限
+GBIZINFO_DETAIL_CAP = 150
+# 詳細APIの並列リクエスト数
+GBIZINFO_DETAIL_WORKERS = 5
+
+
 def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corporate_numbers=None, exclude_names=None):
     """gBizINFO APIから企業情報を取得する(要 GBIZINFO_API_TOKEN)。
 
-    検索APIで企業一覧(会社名・所在地・法人番号)を取得した後、既に登録済みの
-    企業(法人番号・会社名で判定)を除外し、法人番号ごとに詳細APIを呼んで
-    従業員数・代表者名・事業概要・企業URLを補完する。従業員数が多い企業を
-    優先して上位 count 件を返す。
+    検索APIをページネーションしながら呼び出し、既に登録済みの企業
+    (法人番号・会社名で判定)を除外しつつ候補を集める。法人番号ごとに
+    詳細APIを並列で呼んで従業員数・代表者名・事業概要・企業URLを補完し、
+    従業員数が多い企業を優先して上位 count 件を返す。
     ただし電話番号・部署・担当者部署名は gBizINFO に存在しないため空欄
     (要手動調査)とする。
     """
@@ -151,34 +162,46 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
         return []
 
     headers = {"X-hojinInfo-api-token": GBIZINFO_API_TOKEN, "Accept": "application/json"}
-    # 重複除外後に十分な件数を確保するため、必要件数より多めに取得する(APIの上限は100件)
-    pool_size = min(100, count + 20)
-    params = {
-        "prefecture": prefecture_code,
-        "city": city_code,
-        "corporate_type": GBIZINFO_CORPORATE_TYPES,
-        # 法人活動情報(従業員数・代表者名等)を持つ企業に絞り込む
-        "exist_flg": "true",
-        "page": 1,
-        "limit": pool_size,
-    }
-    response = requests.get(GBIZINFO_ENDPOINT, headers=headers, params=params, timeout=10)
-    response.raise_for_status()
-    data = response.json()
 
     candidates = []
-    for item in data.get("hojin-infos", []):
-        corporate_number = item.get("corporate_number", "")
-        name = item.get("name", "")
-        if corporate_number in exclude_corporate_numbers or name in exclude_names:
-            continue
-        candidates.append(item)
+    for page in range(1, GBIZINFO_MAX_PAGES + 1):
+        params = {
+            "prefecture": prefecture_code,
+            "city": city_code,
+            "corporate_type": GBIZINFO_CORPORATE_TYPES,
+            "page": page,
+            "limit": GBIZINFO_PAGE_LIMIT,
+        }
+        try:
+            response = requests.get(GBIZINFO_ENDPOINT, headers=headers, params=params, timeout=10)
+            response.raise_for_status()
+            items = response.json().get("hojin-infos", [])
+        except requests.RequestException:
+            # レート制限等で検索APIが失敗した場合は、それまでに集めた候補で処理を続ける
+            break
 
-    detailed = []
-    for item in candidates:
+        for item in items:
+            corporate_number = item.get("corporate_number", "")
+            name = item.get("name", "")
+            if corporate_number in exclude_corporate_numbers or name in exclude_names:
+                continue
+            candidates.append(item)
+
+        if len(items) < GBIZINFO_PAGE_LIMIT or len(candidates) >= count:
+            break
+
+    detail_pool = candidates[:max(count, GBIZINFO_DETAIL_CAP)]
+
+    def _with_detail(item):
         corporate_number = item.get("corporate_number", "")
         detail = _fetch_gbizinfo_detail(corporate_number, headers) if corporate_number else None
-        detailed.append((item, detail))
+        return (item, detail)
+
+    if detail_pool:
+        with ThreadPoolExecutor(max_workers=GBIZINFO_DETAIL_WORKERS) as executor:
+            detailed = list(executor.map(_with_detail, detail_pool))
+    else:
+        detailed = []
 
     # 従業員数が判明している企業を優先(従業員数の多い順)し、不明な企業は最後に回す
     detailed.sort(key=lambda pair: pair[1].get("employee_number") if pair[1] and pair[1].get("employee_number") is not None else -1, reverse=True)
@@ -223,12 +246,14 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
 
 
 def collect_companies(industry, prefecture, municipality, count, exclude_corporate_numbers=None, exclude_names=None):
-    """企業情報を収集する。APIトークンがあれば実データ、無ければサンプルデータを返す。"""
+    """企業情報を収集する。APIトークンがあれば実データ、無ければサンプルデータを返す。
+
+    APIトークンが設定されている場合は実データのみを返す(該当企業が無ければ0件)。
+    架空のサンプルデータで件数を埋めることはしない。
+    """
     if GBIZINFO_API_TOKEN:
         try:
-            results = fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corporate_numbers, exclude_names)
-            if results:
-                return results
+            return fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corporate_numbers, exclude_names)
         except requests.RequestException:
-            pass
+            return []
     return generate_sample_companies(industry, prefecture, municipality, count)

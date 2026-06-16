@@ -7,7 +7,7 @@ from datetime import date
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
-from flask import Flask, g, redirect, render_template, request, send_file, url_for
+from flask import Flask, g, jsonify, redirect, render_template, request, send_file, url_for
 
 load_dotenv()
 
@@ -328,13 +328,24 @@ def export():
     )
 
 
+@app.route("/api/count")
+def api_count():
+    db = get_db()
+    prefecture = request.args.get("prefecture", "")
+    if prefecture:
+        row = db.execute("SELECT COUNT(*) AS cnt FROM companies WHERE prefecture=?", (prefecture,)).fetchone()
+    else:
+        row = db.execute("SELECT COUNT(*) AS cnt FROM companies").fetchone()
+    return jsonify({"count": row["cnt"]})
+
+
 @app.route("/collect", methods=["GET", "POST"])
 def collect():
     if request.method == "POST":
         industry = request.form["industry"]
         prefecture = request.form["prefecture"]
         municipality = request.form["municipality"]
-        count = max(1, min(100, int(request.form.get("count", 10))))
+        count = max(1, min(1000, int(request.form.get("count", 10))))
         assigned_to = request.form.get("assigned_to", "")
 
         db = get_db()
