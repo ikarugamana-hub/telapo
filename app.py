@@ -218,6 +218,7 @@ def init_db():
         db.execute(f"ALTER TABLE companies ADD COLUMN IF NOT EXISTS {column} {col_type}")
 
     db.execute("ALTER TABLE companies DROP COLUMN IF EXISTS contact_person")
+    db.commit()
 
     count = db.execute("SELECT COUNT(*) AS cnt FROM companies").fetchone()["cnt"]
     if count == 0:
