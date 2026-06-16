@@ -3,6 +3,7 @@ import io
 import os
 import re
 from datetime import date
+from urllib.parse import quote_plus
 
 import psycopg2
 import psycopg2.extras
@@ -352,10 +353,11 @@ def export():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["会社名", "業種", "都道府県", "市区町村", "従業員数", "電話番号", "部署", "状況", "メモ", "当社担当者", "最新訪問日", "リマインダー日"])
+    writer.writerow(["会社名", "Google検索", "業種", "都道府県", "市区町村", "従業員数", "電話番号", "部署", "状況", "メモ", "当社担当者", "最新訪問日", "リマインダー日"])
     for r in rows:
+        google_search_url = f"https://www.google.com/search?q={quote_plus(r['company_name'] or '')}"
         writer.writerow(
-            [r["company_name"], r["industry"], r["prefecture"], r["municipality"], r["employees"],
+            [r["company_name"], f'=HYPERLINK("{google_search_url}","検索")', r["industry"], r["prefecture"], r["municipality"], r["employees"],
              r["phone"], r["department"], r["status"], r["memo"], r["assigned_to"],
              r["last_visit_date"], r["reminder_date"]]
         )
