@@ -218,18 +218,6 @@ def init_db():
         db.execute(f"ALTER TABLE companies ADD COLUMN IF NOT EXISTS {column} {col_type}")
 
     db.execute("ALTER TABLE companies DROP COLUMN IF EXISTS contact_person")
-    for old_status, new_status in STATUS_MIGRATIONS.items():
-        db.execute("UPDATE companies SET status=? WHERE status=?", (new_status, old_status))
-    for old_value, sales_department in LEGACY_ASSIGNED_TO_DEPARTMENT_MIGRATIONS.items():
-        db.execute(
-            """
-            UPDATE companies
-            SET sales_department=?, assigned_to=''
-            WHERE assigned_to=?
-              AND (sales_department IS NULL OR sales_department='')
-            """,
-            (sales_department, old_value),
-        )
 
     count = db.execute("SELECT COUNT(*) AS cnt FROM companies").fetchone()["cnt"]
     if count == 0:
