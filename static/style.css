@@ -190,6 +190,39 @@ main {
     font-size: 0.9rem;
 }
 
+.csv-actions {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    border-top: 1px solid #edf0f3;
+    padding-top: 12px;
+}
+
+.csv-actions form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.csv-actions input[type="file"] {
+    font-size: 0.9rem;
+}
+
+.csv-actions button,
+.csv-download {
+    background: #2d6cdf;
+    color: #fff;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
 .add-link {
     margin-left: auto;
     font-weight: bold;
@@ -241,13 +274,19 @@ main {
     margin-top: 16px;
 }
 
+.table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
 table {
     width: 100%;
+    min-width: 1500px;
     border-collapse: collapse;
     background: #fff;
-    border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 th, td {
@@ -262,8 +301,29 @@ th {
     font-weight: 600;
 }
 
-.col-company {
+td input,
+td select,
+td textarea {
+    width: 100%;
+    min-width: 96px;
+    padding: 6px 7px;
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: #fff;
+}
+
+td textarea {
     min-width: 220px;
+    resize: vertical;
+}
+
+td .number-input {
+    min-width: 80px;
+}
+
+.col-company {
+    min-width: 240px;
 }
 
 .google-link {
@@ -300,6 +360,13 @@ th {
     cursor: pointer;
     padding: 0;
     font-size: 0.9rem;
+}
+
+.actions .save-button {
+    color: #fff;
+    background: #2d6cdf;
+    padding: 5px 9px;
+    border-radius: 4px;
 }
 
 .status {

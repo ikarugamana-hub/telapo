@@ -44,6 +44,10 @@
         <input type="text" name="department" value="{{ company['department'] if company else '' }}">
     </label>
 
+    <label>営業部
+        <input type="text" name="sales_department" value="{{ company['sales_department'] if company else '' }}">
+    </label>
+
     <label>当社担当者
         <select name="assigned_to">
             <option value="">未割り当て</option>
@@ -53,12 +57,8 @@
         </select>
     </label>
 
-    <label>最新訪問日
-        <input type="date" name="last_visit_date" value="{{ company['last_visit_date'] if company else '' }}">
-    </label>
-
-    <label>リマインダー日
-        <input type="date" name="reminder_date" value="{{ company['reminder_date'] if company else '' }}">
+    <label>最終アプローチ日
+        <input type="date" name="last_approach_date" value="{{ company['last_approach_date'] if company else '' }}">
     </label>
 
     <label>状況

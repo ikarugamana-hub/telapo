@@ -96,12 +96,22 @@
         <div class="filter-actions">
             <button type="submit">絞り込み</button>
             <a href="{{ url_for('index') }}">条件クリア</a>
-            <a href="{{ url_for('export', **filters) }}">この条件でCSV出力</a>
             <a href="{{ url_for('add') }}">＋ 新規登録</a>
             <a href="{{ url_for('collect') }}" class="add-link">業種・地域からリスト自動作成</a>
         </div>
     </form>
+    <div class="csv-actions">
+        <a class="csv-download" href="{{ url_for('export', **filters) }}">検索結果をCSVダウンロード</a>
+        <form method="post" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
+            <input type="file" name="csv_file" accept=".csv,text/csv" required>
+            <button type="submit">CSVアップロード</button>
+        </form>
+    </div>
 </section>
+
+{% if filters.get('upload_message') %}
+<p class="notice notice-info">{{ filters.get('upload_message') }}</p>
+{% endif %}
 
 <div class="result-summary">
     <p class="result-count">該当件数: {{ total }} 件{% if total %} / {{ start_item }}〜{{ end_item }} 件目を表示{% endif %}</p>
@@ -120,6 +130,7 @@
     </nav>
 </div>
 
+<div class="table-scroll">
 <table>
     <thead>
         <tr>
@@ -130,33 +141,50 @@
             <th>従業員数</th>
             <th>電話番号</th>
             <th>部署</th>
+            <th>営業部</th>
             <th>当社担当者</th>
             <th>状況</th>
-            <th>最新訪問日</th>
-            <th>リマインダー日</th>
+            <th>最終アプローチ日</th>
             <th>メモ</th>
             <th>操作</th>
         </tr>
     </thead>
     <tbody>
         {% for c in companies %}
-        <tr class="{% if c['reminder_date'] and c['reminder_date'] <= today %}reminder-due{% endif %}">
+        <tr>
             <td class="col-company">
-                {{ c['company_name'] }}
+                <input form="row-form-{{ c['id'] }}" type="text" name="company_name" value="{{ c['company_name'] }}" required>
                 <a class="google-link" href="https://www.google.com/search?q={{ c['company_name'] | urlencode }}" target="_blank" rel="noopener" title="Googleで検索">検索</a>
             </td>
-            <td>{{ c['industry'] }}</td>
-            <td>{{ c['prefecture'] }}</td>
-            <td>{{ c['municipality'] }}</td>
-            <td>{{ c['employees'] }}</td>
-            <td>{{ c['phone'] }}</td>
-            <td>{{ c['department'] }}</td>
-            <td>{{ c['assigned_to'] or '' }}</td>
-            <td><span class="status status-{{ c['status'] }}">{{ c['status'] }}</span></td>
-            <td>{{ c['last_visit_date'] or '' }}</td>
-            <td>{{ c['reminder_date'] or '' }}</td>
-            <td>{{ c['memo'] }}</td>
+            <td><input form="row-form-{{ c['id'] }}" type="text" name="industry" value="{{ c['industry'] or '' }}"></td>
+            <td><input form="row-form-{{ c['id'] }}" type="text" name="prefecture" value="{{ c['prefecture'] or '' }}"></td>
+            <td><input form="row-form-{{ c['id'] }}" type="text" name="municipality" value="{{ c['municipality'] or '' }}"></td>
+            <td><input form="row-form-{{ c['id'] }}" class="number-input" type="number" name="employees" value="{{ c['employees'] if c['employees'] is not none else '' }}" min="0"></td>
+            <td><input form="row-form-{{ c['id'] }}" type="text" name="phone" value="{{ c['phone'] or '' }}"></td>
+            <td><input form="row-form-{{ c['id'] }}" type="text" name="department" value="{{ c['department'] or '' }}"></td>
+            <td><input form="row-form-{{ c['id'] }}" type="text" name="sales_department" value="{{ c['sales_department'] or '' }}"></td>
+            <td>
+                <select form="row-form-{{ c['id'] }}" name="assigned_to">
+                    <option value="">未割り当て</option>
+                    {% for dept in assigned_to_choices %}
+                    <option value="{{ dept }}" {% if c['assigned_to'] == dept %}selected{% endif %}>{{ dept }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td>
+                <select form="row-form-{{ c['id'] }}" name="status">
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if c['status'] == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td><input form="row-form-{{ c['id'] }}" type="date" name="last_approach_date" value="{{ c['last_approach_date'] or '' }}"></td>
+            <td><textarea form="row-form-{{ c['id'] }}" name="memo" rows="2">{{ c['memo'] or '' }}</textarea></td>
             <td class="actions">
+                <form id="row-form-{{ c['id'] }}" method="post" action="{{ url_for('inline_update', company_id=c['id']) }}">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <button type="submit" class="save-button">保存</button>
+                </form>
                 <a href="{{ url_for('edit', company_id=c['id']) }}">編集</a>
                 <form method="post" action="{{ url_for('delete', company_id=c['id']) }}" onsubmit="return confirm('削除しますか?');">
                     <button type="submit">削除</button>
@@ -166,6 +194,7 @@
         {% endfor %}
     </tbody>
 </table>
+</div>
 
 <div class="pagination pagination-bottom" aria-label="ページ切り替え">
     {% if prev_page_args %}

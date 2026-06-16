@@ -18,11 +18,27 @@ app = Flask(__name__)
 
 STATUS_CHOICES = ["未架電", "架電中", "通話済み", "アポ獲得", "NG", "不通"]
 ASSIGNED_TO_CHOICES = [f"営業{i}部" for i in range(1, 8)]
+CSV_COLUMNS = [
+    "ID",
+    "会社名",
+    "Google検索",
+    "業種",
+    "都道府県",
+    "市区町村",
+    "従業員数",
+    "電話番号",
+    "部署",
+    "営業部",
+    "当社担当者",
+    "状況",
+    "最終アプローチ日",
+    "メモ",
+]
 
 SORT_OPTIONS = {
     "id_desc": ("id", "DESC", "新着順"),
     "status": ("status", "ASC", "状況順"),
-    "reminder_date": ("reminder_date", "ASC", "リマインダー日順"),
+    "last_approach_date": ("last_approach_date", "DESC", "最終アプローチ日順"),
     "company_name": ("company_name", "ASC", "会社名順"),
     "employees_asc": ("employees", "ASC", "従業員数 少ない順"),
     "employees_desc": ("employees", "DESC", "従業員数 多い順"),
@@ -110,9 +126,11 @@ def init_db():
 
     for column, col_type in [
         ("municipality", "TEXT"),
+        ("sales_department", "TEXT"),
         ("assigned_to", "TEXT"),
         ("last_visit_date", "TEXT"),
         ("reminder_date", "TEXT"),
+        ("last_approach_date", "TEXT"),
     ]:
         db.execute(f"ALTER TABLE companies ADD COLUMN IF NOT EXISTS {column} {col_type}")
 
@@ -216,6 +234,124 @@ def page_url_args(page):
     return args
 
 
+def return_to_index():
+    next_url = request.form.get("next") or url_for("index")
+    return redirect(next_url)
+
+
+def parse_optional_int(value):
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def get_row_value(row, *names):
+    for name in names:
+        value = row.get(name)
+        if value is not None and value != "":
+            return value
+    return ""
+
+
+def normalize_csv_row(row):
+    return {
+        "company_name": get_row_value(row, "会社名", "company_name"),
+        "industry": get_row_value(row, "業種", "industry"),
+        "prefecture": get_row_value(row, "都道府県", "prefecture"),
+        "municipality": get_row_value(row, "市区町村", "municipality"),
+        "employees": parse_optional_int(get_row_value(row, "従業員数", "employees")),
+        "phone": get_row_value(row, "電話番号", "phone"),
+        "department": get_row_value(row, "部署", "department"),
+        "sales_department": get_row_value(row, "営業部", "sales_department"),
+        "assigned_to": get_row_value(row, "当社担当者", "assigned_to"),
+        "status": get_row_value(row, "状況", "status") or "未架電",
+        "last_approach_date": get_row_value(row, "最終アプローチ日", "last_approach_date"),
+        "memo": get_row_value(row, "メモ", "memo"),
+    }
+
+
+def find_company_id_for_csv_row(db, row):
+    raw_id = get_row_value(row, "ID", "id")
+    if raw_id:
+        try:
+            company_id = int(raw_id)
+        except ValueError:
+            return None
+        existing = db.execute("SELECT id FROM companies WHERE id=?", (company_id,)).fetchone()
+        return existing["id"] if existing else None
+
+    company_name = get_row_value(row, "会社名", "company_name")
+    prefecture = get_row_value(row, "都道府県", "prefecture")
+    municipality = get_row_value(row, "市区町村", "municipality")
+    if not company_name:
+        return None
+    existing = db.execute(
+        """
+        SELECT id FROM companies
+        WHERE company_name=? AND COALESCE(prefecture, '')=? AND COALESCE(municipality, '')=?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (company_name, prefecture, municipality),
+    ).fetchone()
+    return existing["id"] if existing else None
+
+
+def update_company(db, company_id, values):
+    db.execute(
+        """
+        UPDATE companies
+        SET company_name=?, industry=?, prefecture=?, municipality=?, employees=?, phone=?,
+            department=?, sales_department=?, assigned_to=?, status=?, last_approach_date=?, memo=?
+        WHERE id=?
+        """,
+        (
+            values["company_name"],
+            values["industry"],
+            values["prefecture"],
+            values["municipality"],
+            values["employees"],
+            values["phone"],
+            values["department"],
+            values["sales_department"],
+            values["assigned_to"],
+            values["status"],
+            values["last_approach_date"],
+            values["memo"],
+            company_id,
+        ),
+    )
+
+
+def insert_company(db, values):
+    db.execute(
+        """
+        INSERT INTO companies
+            (company_name, industry, prefecture, municipality, employees, phone,
+             department, sales_department, assigned_to, status, last_approach_date, memo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            values["company_name"],
+            values["industry"],
+            values["prefecture"],
+            values["municipality"],
+            values["employees"],
+            values["phone"],
+            values["department"],
+            values["sales_department"],
+            values["assigned_to"],
+            values["status"],
+            values["last_approach_date"],
+            values["memo"],
+        ),
+    )
+
+
 @app.route("/")
 def index():
     db = get_db()
@@ -274,27 +410,7 @@ def index():
 def add():
     if request.method == "POST":
         db = get_db()
-        db.execute(
-            """
-            INSERT INTO companies
-                (company_name, industry, prefecture, municipality, employees, phone, department, status, memo, assigned_to, last_visit_date, reminder_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                request.form["company_name"],
-                request.form.get("industry", ""),
-                request.form.get("prefecture", ""),
-                request.form.get("municipality", ""),
-                int(request.form["employees"]) if request.form.get("employees") else None,
-                request.form.get("phone", ""),
-                request.form.get("department", ""),
-                request.form.get("status", "未架電"),
-                request.form.get("memo", ""),
-                request.form.get("assigned_to", ""),
-                request.form.get("last_visit_date", ""),
-                request.form.get("reminder_date", ""),
-            ),
-        )
+        insert_company(db, normalize_csv_row(request.form))
         db.commit()
         return redirect(url_for("index"))
 
@@ -305,34 +421,20 @@ def add():
 def edit(company_id):
     db = get_db()
     if request.method == "POST":
-        db.execute(
-            """
-            UPDATE companies
-            SET company_name=?, industry=?, prefecture=?, municipality=?, employees=?, phone=?,
-                department=?, status=?, memo=?, assigned_to=?, last_visit_date=?, reminder_date=?
-            WHERE id=?
-            """,
-            (
-                request.form["company_name"],
-                request.form.get("industry", ""),
-                request.form.get("prefecture", ""),
-                request.form.get("municipality", ""),
-                int(request.form["employees"]) if request.form.get("employees") else None,
-                request.form.get("phone", ""),
-                request.form.get("department", ""),
-                request.form.get("status", "未架電"),
-                request.form.get("memo", ""),
-                request.form.get("assigned_to", ""),
-                request.form.get("last_visit_date", ""),
-                request.form.get("reminder_date", ""),
-                company_id,
-            ),
-        )
+        update_company(db, company_id, normalize_csv_row(request.form))
         db.commit()
         return redirect(url_for("index"))
 
     company = db.execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
     return render_template("form.html", company=company, statuses=STATUS_CHOICES, industries=INDUSTRY_CHOICES, assigned_to_choices=ASSIGNED_TO_CHOICES)
+
+
+@app.route("/inline-update/<int:company_id>", methods=["POST"])
+def inline_update(company_id):
+    db = get_db()
+    update_company(db, company_id, normalize_csv_row(request.form))
+    db.commit()
+    return return_to_index()
 
 
 @app.route("/delete/<int:company_id>", methods=["POST"])
@@ -353,13 +455,26 @@ def export():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["会社名", "Google検索", "業種", "都道府県", "市区町村", "従業員数", "電話番号", "部署", "状況", "メモ", "当社担当者", "最新訪問日", "リマインダー日"])
+    writer.writerow(CSV_COLUMNS)
     for r in rows:
         google_search_url = f"https://www.google.com/search?q={quote_plus(r['company_name'] or '')}"
         writer.writerow(
-            [r["company_name"], f'=HYPERLINK("{google_search_url}","検索")', r["industry"], r["prefecture"], r["municipality"], r["employees"],
-             r["phone"], r["department"], r["status"], r["memo"], r["assigned_to"],
-             r["last_visit_date"], r["reminder_date"]]
+            [
+                r["id"],
+                r["company_name"],
+                f'=HYPERLINK("{google_search_url}","検索")',
+                r["industry"],
+                r["prefecture"],
+                r["municipality"],
+                r["employees"],
+                r["phone"],
+                r["department"],
+                r["sales_department"],
+                r["assigned_to"],
+                r["status"],
+                r["last_approach_date"],
+                r["memo"],
+            ]
         )
 
     csv_bytes = io.BytesIO(output.getvalue().encode("utf-8-sig"))
@@ -368,6 +483,42 @@ def export():
         mimetype="text/csv",
         as_attachment=True,
         download_name="telecall_list.csv",
+    )
+
+
+@app.route("/upload", methods=["POST"])
+def upload_csv():
+    uploaded = request.files.get("csv_file")
+    if not uploaded or not uploaded.filename:
+        return redirect(url_for("index", upload_message="CSVファイルを選択してください"))
+
+    content = uploaded.read().decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(content))
+    db = get_db()
+    inserted = 0
+    updated = 0
+    skipped = 0
+
+    for row in reader:
+        values = normalize_csv_row(row)
+        if not values["company_name"]:
+            skipped += 1
+            continue
+
+        company_id = find_company_id_for_csv_row(db, row)
+        if company_id:
+            update_company(db, company_id, values)
+            updated += 1
+        else:
+            insert_company(db, values)
+            inserted += 1
+
+    db.commit()
+    return redirect(
+        url_for(
+            "index",
+            upload_message=f"CSV取込完了: 更新 {updated} 件 / 追加 {inserted} 件 / スキップ {skipped} 件",
+        )
     )
 
 
@@ -472,14 +623,15 @@ def collect():
         db.executemany(
             """
             INSERT INTO companies
-                (company_name, industry, prefecture, municipality, employees, phone, department, status, memo, assigned_to)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (company_name, industry, prefecture, municipality, employees, phone,
+                 department, sales_department, assigned_to, status, last_approach_date, memo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     c["company_name"], c["industry"], c["prefecture"], c["municipality"],
-                    c["employees"], c["phone"], c["department"],
-                    c["status"], c["memo"], assigned_to,
+                    c["employees"], c["phone"], c["department"], "",
+                    assigned_to, c["status"], "", c["memo"],
                 )
                 for c in results
             ],
