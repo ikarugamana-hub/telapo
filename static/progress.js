@@ -12,10 +12,14 @@ function renderProgress(data) {
         : '最新登録: まだありません';
 
     document.querySelector('[data-progress-current]').textContent = latestText;
+    const description = document.querySelector('[data-progress-description]');
+    if (description) {
+        description.textContent = data.description || '';
+    }
     document.querySelector('[data-progress-updated]').textContent =
         `自動更新 ${new Date().toLocaleTimeString('ja-JP')}`;
     document.querySelector('[data-progress-total]').textContent =
-        `全体 ${formatNumber(data.total)} / ${formatNumber(data.target_total)} 件 (${data.overall_percent}%)`;
+        `対象合計 ${formatNumber(data.total)} / ${formatNumber(data.target_total)} 件 (${data.overall_percent}%)`;
     document.querySelector('[data-progress-prefectures]').textContent =
         `達成 ${data.completed_prefectures} / ${data.prefecture_total} 都道府県`;
 
@@ -35,7 +39,10 @@ function renderProgress(data) {
         name.textContent = pref.name;
 
         const count = document.createElement('span');
-        count.textContent = `${formatNumber(pref.count)}件`;
+        count.textContent = `${formatNumber(pref.count)} / ${formatNumber(pref.target)}件`;
+
+        const detail = document.createElement('span');
+        detail.textContent = `追加 ${formatNumber(pref.added)}件 / 残り ${formatNumber(pref.remaining)}件`;
 
         const meter = document.createElement('div');
         meter.className = 'progress-mini-bar';
@@ -43,7 +50,7 @@ function renderProgress(data) {
         meterFill.style.width = `${Math.min(pref.percent, 100)}%`;
         meter.appendChild(meterFill);
 
-        item.append(name, count, meter);
+        item.append(name, count, detail, meter);
         grid.appendChild(item);
     });
 }

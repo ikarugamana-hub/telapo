@@ -128,6 +128,74 @@ SORT_OPTIONS = {
 
 PER_PAGE = 100
 COLLECTION_TARGET_PER_PREFECTURE = 10_000
+COLLECTION_EXCLUDED_PREFECTURES = {"沖縄県"}
+ORDINANCE_DESIGNATED_PREFECTURES = {
+    "北海道",
+    "宮城県",
+    "埼玉県",
+    "千葉県",
+    "神奈川県",
+    "新潟県",
+    "静岡県",
+    "愛知県",
+    "京都府",
+    "大阪府",
+    "兵庫県",
+    "岡山県",
+    "広島県",
+    "福岡県",
+    "熊本県",
+}
+PREFECTURE_BOOST_BASELINES = {
+    "北海道": 10000,
+    "青森県": 10000,
+    "岩手県": 10000,
+    "宮城県": 10000,
+    "秋田県": 10000,
+    "山形県": 10000,
+    "福島県": 10000,
+    "茨城県": 10000,
+    "栃木県": 10000,
+    "群馬県": 10000,
+    "埼玉県": 10000,
+    "千葉県": 10000,
+    "東京都": 10000,
+    "神奈川県": 10000,
+    "新潟県": 10100,
+    "富山県": 10000,
+    "石川県": 12484,
+    "福井県": 10000,
+    "山梨県": 10000,
+    "長野県": 10000,
+    "岐阜県": 10000,
+    "静岡県": 10000,
+    "愛知県": 10000,
+    "三重県": 10000,
+    "滋賀県": 10000,
+    "京都府": 10000,
+    "大阪府": 10000,
+    "兵庫県": 10000,
+    "奈良県": 10000,
+    "和歌山県": 10000,
+    "鳥取県": 6963,
+    "島根県": 8677,
+    "岡山県": 10000,
+    "広島県": 10000,
+    "山口県": 10000,
+    "徳島県": 10000,
+    "香川県": 10000,
+    "愛媛県": 10000,
+    "高知県": 9261,
+    "福岡県": 10000,
+    "佐賀県": 10000,
+    "長崎県": 10000,
+    "熊本県": 10000,
+    "大分県": 10000,
+    "宮崎県": 10000,
+    "鹿児島県": 10000,
+}
+NORMAL_PREFECTURE_ADDITION = 5_000
+ORDINANCE_PREFECTURE_TARGET = 20_000
 
 
 def get_db_connection():
@@ -627,6 +695,15 @@ def api_count():
     return jsonify({"count": row["cnt"]})
 
 
+def get_collection_target(prefecture):
+    if prefecture in COLLECTION_EXCLUDED_PREFECTURES:
+        return None
+    baseline = PREFECTURE_BOOST_BASELINES.get(prefecture, 0)
+    if prefecture in ORDINANCE_DESIGNATED_PREFECTURES:
+        return max(baseline, ORDINANCE_PREFECTURE_TARGET)
+    return baseline + NORMAL_PREFECTURE_ADDITION
+
+
 @app.route("/api/progress")
 def api_progress():
     db = get_db()
@@ -643,7 +720,7 @@ def api_progress():
         """
         SELECT prefecture, municipality
         FROM companies
-        WHERE prefecture IS NOT NULL AND prefecture != ''
+        WHERE prefecture IS NOT NULL AND prefecture != '' AND prefecture != '沖縄県'
         ORDER BY id DESC
         LIMIT 1
         """
@@ -654,23 +731,31 @@ def api_progress():
     capped_total = 0
     completed_count = 0
     for prefecture in PREFECTURE_CODES.keys():
+        target = get_collection_target(prefecture)
+        if target is None:
+            continue
         count = counts.get(prefecture, 0)
         collected_total += count
-        capped_count = min(count, COLLECTION_TARGET_PER_PREFECTURE)
+        capped_count = min(count, target)
         capped_total += capped_count
-        if count >= COLLECTION_TARGET_PER_PREFECTURE:
+        if count >= target:
             completed_count += 1
+        baseline = PREFECTURE_BOOST_BASELINES.get(prefecture, 0)
         prefectures.append(
             {
                 "name": prefecture,
                 "count": count,
-                "target": COLLECTION_TARGET_PER_PREFECTURE,
-                "percent": round(capped_count / COLLECTION_TARGET_PER_PREFECTURE * 100, 1),
-                "completed": count >= COLLECTION_TARGET_PER_PREFECTURE,
+                "baseline": baseline,
+                "added": max(count - baseline, 0),
+                "target": target,
+                "remaining": max(target - count, 0),
+                "percent": round(capped_count / target * 100, 1) if target else 0,
+                "completed": count >= target,
+                "target_type": "政令指定都市県" if prefecture in ORDINANCE_DESIGNATED_PREFECTURES else "追加5000県",
             }
         )
 
-    target_total = len(prefectures) * COLLECTION_TARGET_PER_PREFECTURE
+    target_total = sum(pref["target"] for pref in prefectures)
     overall_percent = round(capped_total / target_total * 100, 1) if target_total else 0
     return jsonify(
         {
@@ -679,6 +764,9 @@ def api_progress():
             "overall_percent": overall_percent,
             "completed_prefectures": completed_count,
             "prefecture_total": len(prefectures),
+            "mode": "都道府県追加収集",
+            "description": "沖縄県・町・村を除外。通常県は開始時点から+5000社、政令指定都市がある県は合計20000社まで。",
+            "excluded_prefectures": sorted(COLLECTION_EXCLUDED_PREFECTURES),
             "latest": latest or {},
             "prefectures": prefectures,
         }
