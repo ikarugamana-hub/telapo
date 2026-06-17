@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 import sys
 import time
 from collections import defaultdict
@@ -33,6 +34,54 @@ ORDINANCE_DESIGNATED_PREFECTURES = {
 
 NORMAL_PREFECTURE_ADDITION = 5_000
 ORDINANCE_PREFECTURE_TARGET = 20_000
+PREFECTURE_BOOST_BASELINES = {
+    "北海道": 10000,
+    "青森県": 10000,
+    "岩手県": 10000,
+    "宮城県": 10000,
+    "秋田県": 10000,
+    "山形県": 10000,
+    "福島県": 10000,
+    "茨城県": 10000,
+    "栃木県": 10000,
+    "群馬県": 10000,
+    "埼玉県": 10000,
+    "千葉県": 10000,
+    "東京都": 10000,
+    "神奈川県": 10000,
+    "新潟県": 10100,
+    "富山県": 10000,
+    "石川県": 12484,
+    "福井県": 10000,
+    "山梨県": 10000,
+    "長野県": 10000,
+    "岐阜県": 10000,
+    "静岡県": 10000,
+    "愛知県": 10000,
+    "三重県": 10000,
+    "滋賀県": 10000,
+    "京都府": 10000,
+    "大阪府": 10000,
+    "兵庫県": 10000,
+    "奈良県": 10000,
+    "和歌山県": 10000,
+    "鳥取県": 6963,
+    "島根県": 8677,
+    "岡山県": 10000,
+    "広島県": 10000,
+    "山口県": 10000,
+    "徳島県": 10000,
+    "香川県": 10000,
+    "愛媛県": 10000,
+    "高知県": 9261,
+    "福岡県": 10000,
+    "佐賀県": 10000,
+    "長崎県": 10000,
+    "熊本県": 10000,
+    "大分県": 10000,
+    "宮崎県": 10000,
+    "鹿児島県": 10000,
+}
 MAX_REQUEST_COUNT = 1_000
 MAX_PASSES = 12
 REQUEST_INTERVAL_SECONDS = 2
@@ -110,20 +159,32 @@ def build_targets(prefectures):
     targets = {}
     baselines = {}
     for prefecture in prefectures:
-        current = get_count(prefecture)
-        baselines[prefecture] = current
-        if prefecture in ORDINANCE_DESIGNATED_PREFECTURES:
-            targets[prefecture] = max(current, ORDINANCE_PREFECTURE_TARGET)
+        if prefecture in PREFECTURE_BOOST_BASELINES:
+            baseline = PREFECTURE_BOOST_BASELINES[prefecture]
         else:
-            targets[prefecture] = current + NORMAL_PREFECTURE_ADDITION
+            baseline = get_count(prefecture)
+        baselines[prefecture] = baseline
+        if prefecture in ORDINANCE_DESIGNATED_PREFECTURES:
+            targets[prefecture] = max(baseline, ORDINANCE_PREFECTURE_TARGET)
+        else:
+            targets[prefecture] = baseline + NORMAL_PREFECTURE_ADDITION
     return baselines, targets
 
 
 def main():
     prefectures, municipalities_by_prefecture = load_municipalities_by_prefecture()
+    worker_total = max(1, int(os.environ.get("WORKER_TOTAL", "1")))
+    worker_index = int(os.environ.get("WORKER_INDEX", "0"))
+    if worker_index < 0 or worker_index >= worker_total:
+        raise ValueError("WORKER_INDEX must be between 0 and WORKER_TOTAL - 1")
+    prefectures = [
+        prefecture
+        for index, prefecture in enumerate(prefectures)
+        if index % worker_total == worker_index
+    ]
     baselines, targets = build_targets(prefectures)
 
-    log("===== PREFECTURE BOOST START =====")
+    log(f"===== PREFECTURE BOOST START worker={worker_index + 1}/{worker_total} =====")
     log(f"total_before={get_count()}")
     log(
         "rules: Okinawa excluded, towns/villages excluded, "
@@ -136,7 +197,7 @@ def main():
         )
 
     for pass_no in range(1, MAX_PASSES + 1):
-        log(f"===== PASS {pass_no} START =====")
+        log(f"===== PASS {pass_no} START worker={worker_index + 1}/{worker_total} =====")
         progressed = False
 
         for prefecture in prefectures:
