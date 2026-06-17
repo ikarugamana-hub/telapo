@@ -12,7 +12,7 @@ from flask import Flask, g, jsonify, redirect, render_template, request, send_fi
 
 load_dotenv()
 
-from collector import INDUSTRY_CHOICES, PREFECTURE_CODES, collect_companies
+from collector import CITY_CODES, INDUSTRY_CHOICES, PREFECTURE_CODES, collect_companies
 
 app = Flask(__name__)
 
@@ -140,6 +140,7 @@ INDUSTRY_FILTER_ALIASES = {
     "金融": ["金融・保険"],
     "ｻｰﾋﾞｽ業": ["サービス業"],
 }
+MUNICIPALITY_CHOICES = sorted({key.split("|", 1)[1] for key in CITY_CODES})
 
 PER_PAGE = 100
 COLLECTION_TARGET_PER_PREFECTURE = 10_000
@@ -300,6 +301,16 @@ def init_db():
         db.execute(f"ALTER TABLE companies ADD COLUMN IF NOT EXISTS {column} {col_type}")
 
     db.execute("ALTER TABLE companies DROP COLUMN IF EXISTS contact_person")
+    for index_sql in [
+        "CREATE INDEX IF NOT EXISTS idx_companies_prefecture ON companies(prefecture)",
+        "CREATE INDEX IF NOT EXISTS idx_companies_municipality ON companies(municipality)",
+        "CREATE INDEX IF NOT EXISTS idx_companies_industry ON companies(industry)",
+        "CREATE INDEX IF NOT EXISTS idx_companies_status ON companies(status)",
+        "CREATE INDEX IF NOT EXISTS idx_companies_assigned_to ON companies(assigned_to)",
+        "CREATE INDEX IF NOT EXISTS idx_companies_employees ON companies(employees)",
+        "CREATE INDEX IF NOT EXISTS idx_companies_id_desc ON companies(id DESC)",
+    ]:
+        db.execute(index_sql)
     db.commit()
 
     count = db.execute("SELECT COUNT(*) AS cnt FROM companies").fetchone()["cnt"]
@@ -546,8 +557,8 @@ def index():
     ).fetchall()
 
     industries = INDUSTRY_CHOICES
-    prefectures = [r["prefecture"] for r in db.execute("SELECT DISTINCT prefecture FROM companies ORDER BY prefecture").fetchall()]
-    municipalities = [r["municipality"] for r in db.execute("SELECT DISTINCT municipality FROM companies WHERE municipality IS NOT NULL ORDER BY municipality").fetchall()]
+    prefectures = list(PREFECTURE_CODES.keys())
+    municipalities = MUNICIPALITY_CHOICES
 
     return render_template(
         "index.html",
