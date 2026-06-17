@@ -272,7 +272,7 @@ def _fetch_gbizinfo_detail(corporate_number, headers):
 # 1ページあたりの取得件数(APIの上限)
 GBIZINFO_PAGE_LIMIT = 100
 # 1回の収集で走査するページ数の上限(これを超えて候補を探さない)
-GBIZINFO_MAX_PAGES = 10
+GBIZINFO_MAX_PAGES = int(os.environ.get("GBIZINFO_MAX_PAGES", "50"))
 # 詳細API(従業員数等)を問い合わせる候補数の上限
 GBIZINFO_DETAIL_CAP = 150
 # 詳細APIの並列リクエスト数
