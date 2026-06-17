@@ -155,6 +155,12 @@ def collect(prefecture, municipality, count):
     return response.status_code
 
 
+def get_worker_config():
+    worker_total = os.environ.get("WORKER_TOTAL") or os.environ.get("CLOUD_RUN_TASK_COUNT") or "1"
+    worker_index = os.environ.get("WORKER_INDEX") or os.environ.get("CLOUD_RUN_TASK_INDEX") or "0"
+    return max(1, int(worker_total)), int(worker_index)
+
+
 def build_targets(prefectures):
     targets = {}
     baselines = {}
@@ -173,8 +179,7 @@ def build_targets(prefectures):
 
 def main():
     prefectures, municipalities_by_prefecture = load_municipalities_by_prefecture()
-    worker_total = max(1, int(os.environ.get("WORKER_TOTAL", "1")))
-    worker_index = int(os.environ.get("WORKER_INDEX", "0"))
+    worker_total, worker_index = get_worker_config()
     if worker_index < 0 or worker_index >= worker_total:
         raise ValueError("WORKER_INDEX must be between 0 and WORKER_TOTAL - 1")
     prefectures = [
