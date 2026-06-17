@@ -125,6 +125,21 @@ SORT_OPTIONS = {
     "employees_asc": ("employees", "ASC", "従業員数 少ない順"),
     "employees_desc": ("employees", "DESC", "従業員数 多い順"),
 }
+INDUSTRY_FILTER_ALIASES = {
+    "システム": ["IT・ソフトウェア"],
+    "開発": ["IT・ソフトウェア"],
+    "製造": ["製造業"],
+    "商社": ["商社"],
+    "飲食": ["食品・飲食"],
+    "建設・建築": ["建設業"],
+    "運輸・倉庫": ["運輸・物流"],
+    "電気・ｶﾞｽ・水道業": ["エネルギー"],
+    "施設・介護": ["医療・福祉"],
+    "病院": ["医療・福祉"],
+    "不動産業": ["不動産"],
+    "金融": ["金融・保険"],
+    "ｻｰﾋﾞｽ業": ["サービス業"],
+}
 
 PER_PAGE = 100
 COLLECTION_TARGET_PER_PREFECTURE = 10_000
@@ -330,8 +345,10 @@ def build_filters(args):
 
     industry = args.get("industry", "").strip()
     if industry:
-        conditions.append("industry = ?")
-        params.append(industry)
+        industry_values = [industry] + INDUSTRY_FILTER_ALIASES.get(industry, [])
+        placeholders = ", ".join("?" for _ in industry_values)
+        conditions.append(f"industry IN ({placeholders})")
+        params.extend(industry_values)
 
     prefecture = args.get("prefecture", "").strip()
     if prefecture:
@@ -528,7 +545,7 @@ def index():
         params + [PER_PAGE, offset],
     ).fetchall()
 
-    industries = [r["industry"] for r in db.execute("SELECT DISTINCT industry FROM companies ORDER BY industry").fetchall()]
+    industries = INDUSTRY_CHOICES
     prefectures = [r["prefecture"] for r in db.execute("SELECT DISTINCT prefecture FROM companies ORDER BY prefecture").fetchall()]
     municipalities = [r["municipality"] for r in db.execute("SELECT DISTINCT municipality FROM companies WHERE municipality IS NOT NULL ORDER BY municipality").fetchall()]
 
