@@ -10,7 +10,7 @@ from pathlib import Path
 import requests
 
 
-BASE_URL = "https://telapo-946260728277.asia-northeast1.run.app"
+BASE_URL = os.environ.get("BASE_URL", "https://telapo-946260728277.asia-northeast1.run.app")
 AREA_CODES_PATH = Path(__file__).resolve().parents[1] / "area_codes.json"
 
 EXCLUDED_PREFECTURES = {"沖縄県"}
