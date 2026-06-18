@@ -212,6 +212,16 @@ PREFECTURE_BOOST_BASELINES = {
 }
 NORMAL_PREFECTURE_ADDITION = 5_000
 ORDINANCE_PREFECTURE_TARGET = 20_000
+MAJOR_MARKET_PREFECTURE_TARGETS = {
+    "東京都": 50_000,
+    "神奈川県": 50_000,
+    "埼玉県": 50_000,
+    "千葉県": 50_000,
+    "大阪府": 50_000,
+    "京都府": 50_000,
+    "兵庫県": 50_000,
+    "愛知県": 50_000,
+}
 
 
 def get_db_connection():
@@ -727,6 +737,8 @@ def get_collection_target(prefecture):
     if prefecture in COLLECTION_EXCLUDED_PREFECTURES:
         return None
     baseline = PREFECTURE_BOOST_BASELINES.get(prefecture, 0)
+    if prefecture in MAJOR_MARKET_PREFECTURE_TARGETS:
+        return max(baseline, MAJOR_MARKET_PREFECTURE_TARGETS[prefecture])
     if prefecture in ORDINANCE_DESIGNATED_PREFECTURES:
         return max(baseline, ORDINANCE_PREFECTURE_TARGET)
     return baseline + NORMAL_PREFECTURE_ADDITION
@@ -779,7 +791,13 @@ def api_progress():
                 "remaining": max(target - count, 0),
                 "percent": round(capped_count / target * 100, 1) if target else 0,
                 "completed": count >= target,
-                "target_type": "政令指定都市県" if prefecture in ORDINANCE_DESIGNATED_PREFECTURES else "追加5000県",
+                "target_type": (
+                    "主要エリア5万"
+                    if prefecture in MAJOR_MARKET_PREFECTURE_TARGETS
+                    else "政令指定都市県"
+                    if prefecture in ORDINANCE_DESIGNATED_PREFECTURES
+                    else "追加5000県"
+                ),
             }
         )
 
@@ -793,7 +811,7 @@ def api_progress():
             "completed_prefectures": completed_count,
             "prefecture_total": len(prefectures),
             "mode": "都道府県追加収集",
-            "description": "沖縄県・町・村を除外。通常県は開始時点から+5000社、政令指定都市がある県は合計20000社まで。",
+            "description": "沖縄県・町・村を除外。通常県は開始時点から+5000社、政令指定都市がある県は合計20000社、関東・関西・名古屋の主要都府県は合計50000社まで。",
             "excluded_prefectures": sorted(COLLECTION_EXCLUDED_PREFECTURES),
             "latest": latest or {},
             "prefectures": prefectures,

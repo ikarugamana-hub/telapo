@@ -34,6 +34,16 @@ ORDINANCE_DESIGNATED_PREFECTURES = {
 
 NORMAL_PREFECTURE_ADDITION = 5_000
 ORDINANCE_PREFECTURE_TARGET = 20_000
+MAJOR_MARKET_PREFECTURE_TARGETS = {
+    "東京都": 50_000,
+    "神奈川県": 50_000,
+    "埼玉県": 50_000,
+    "千葉県": 50_000,
+    "大阪府": 50_000,
+    "京都府": 50_000,
+    "兵庫県": 50_000,
+    "愛知県": 50_000,
+}
 PREFECTURE_BOOST_BASELINES = {
     "北海道": 10000,
     "青森県": 10000,
@@ -170,7 +180,9 @@ def build_targets(prefectures):
         else:
             baseline = get_count(prefecture)
         baselines[prefecture] = baseline
-        if prefecture in ORDINANCE_DESIGNATED_PREFECTURES:
+        if prefecture in MAJOR_MARKET_PREFECTURE_TARGETS:
+            targets[prefecture] = max(baseline, MAJOR_MARKET_PREFECTURE_TARGETS[prefecture])
+        elif prefecture in ORDINANCE_DESIGNATED_PREFECTURES:
             targets[prefecture] = max(baseline, ORDINANCE_PREFECTURE_TARGET)
         else:
             targets[prefecture] = baseline + NORMAL_PREFECTURE_ADDITION
@@ -193,7 +205,8 @@ def main():
     log(f"total_before={get_count()}")
     log(
         "rules: Okinawa excluded, towns/villages excluded, "
-        "normal prefectures baseline+5000, ordinance-designated prefectures total 20000"
+        "normal prefectures baseline+5000, ordinance-designated prefectures total 20000, "
+        "major market prefectures total 50000"
     )
     for prefecture in prefectures:
         log(
