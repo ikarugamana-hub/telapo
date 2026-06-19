@@ -35,14 +35,14 @@ ORDINANCE_DESIGNATED_PREFECTURES = {
 NORMAL_PREFECTURE_ADDITION = 5_000
 ORDINANCE_PREFECTURE_TARGET = 20_000
 MAJOR_MARKET_PREFECTURE_TARGETS = {
-    "東京都": 50_000,
-    "神奈川県": 50_000,
-    "埼玉県": 50_000,
-    "千葉県": 50_000,
-    "大阪府": 50_000,
-    "京都府": 50_000,
-    "兵庫県": 50_000,
-    "愛知県": 50_000,
+    "東京都": 75_000,
+    "神奈川県": 75_000,
+    "埼玉県": 75_000,
+    "千葉県": 75_000,
+    "大阪府": 33_334,
+    "京都府": 33_333,
+    "兵庫県": 33_333,
+    "愛知県": 100_000,
 }
 PREFECTURE_BOOST_BASELINES = {
     "北海道": 10000,
@@ -206,7 +206,7 @@ def main():
     log(
         "rules: Okinawa excluded, towns/villages excluded, "
         "normal prefectures baseline+5000, ordinance-designated prefectures total 20000, "
-        "major market prefectures total 50000"
+        "Kanto total 300000, Kansai total 100000, Nagoya total 100000"
     )
     for prefecture in prefectures:
         log(
