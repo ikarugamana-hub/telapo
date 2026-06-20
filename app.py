@@ -1,18 +1,33 @@
 import csv
+import hmac
 import io
 import os
-import re
 from datetime import date
 from urllib.parse import quote_plus
 
 import psycopg2
 import psycopg2.extras
+import requests
 from dotenv import load_dotenv
-from flask import Flask, g, jsonify, redirect, render_template, request, send_file, url_for
+from flask import Flask, abort, g, jsonify, redirect, render_template, request, send_file, url_for
 
 load_dotenv()
 
-from collector import CITY_CODES, INDUSTRY_CHOICES, PREFECTURE_CODES, collect_companies
+from collector import (
+    CITY_CODES,
+    INDUSTRY_CHOICES,
+    PREFECTURE_CODES,
+    collect_companies,
+    corporate_number_from_memo,
+    filter_new_companies,
+    validate_collection_request,
+)
+from collection_targets import (
+    COLLECTION_EXCLUDED_PREFECTURES,
+    PREFECTURE_BOOST_BASELINES,
+    get_collection_scope,
+    iter_collection_scopes,
+)
 
 app = Flask(__name__)
 
@@ -144,84 +159,6 @@ MUNICIPALITY_CHOICES = sorted({key.split("|", 1)[1] for key in CITY_CODES})
 
 PER_PAGE = 100
 COLLECTION_TARGET_PER_PREFECTURE = 10_000
-COLLECTION_EXCLUDED_PREFECTURES = {"沖縄県"}
-ORDINANCE_DESIGNATED_PREFECTURES = {
-    "北海道",
-    "宮城県",
-    "埼玉県",
-    "千葉県",
-    "神奈川県",
-    "新潟県",
-    "静岡県",
-    "愛知県",
-    "京都府",
-    "大阪府",
-    "兵庫県",
-    "岡山県",
-    "広島県",
-    "福岡県",
-    "熊本県",
-}
-PREFECTURE_BOOST_BASELINES = {
-    "北海道": 10000,
-    "青森県": 10000,
-    "岩手県": 10000,
-    "宮城県": 10000,
-    "秋田県": 10000,
-    "山形県": 10000,
-    "福島県": 10000,
-    "茨城県": 10000,
-    "栃木県": 10000,
-    "群馬県": 10000,
-    "埼玉県": 10000,
-    "千葉県": 10000,
-    "東京都": 10000,
-    "神奈川県": 10000,
-    "新潟県": 10100,
-    "富山県": 10000,
-    "石川県": 12484,
-    "福井県": 10000,
-    "山梨県": 10000,
-    "長野県": 10000,
-    "岐阜県": 10000,
-    "静岡県": 10000,
-    "愛知県": 10000,
-    "三重県": 10000,
-    "滋賀県": 10000,
-    "京都府": 10000,
-    "大阪府": 10000,
-    "兵庫県": 10000,
-    "奈良県": 10000,
-    "和歌山県": 10000,
-    "鳥取県": 6963,
-    "島根県": 8677,
-    "岡山県": 10000,
-    "広島県": 10000,
-    "山口県": 10000,
-    "徳島県": 10000,
-    "香川県": 10000,
-    "愛媛県": 10000,
-    "高知県": 9261,
-    "福岡県": 10000,
-    "佐賀県": 10000,
-    "長崎県": 10000,
-    "熊本県": 10000,
-    "大分県": 10000,
-    "宮崎県": 10000,
-    "鹿児島県": 10000,
-}
-NORMAL_PREFECTURE_ADDITION = 5_000
-ORDINANCE_PREFECTURE_TARGET = 20_000
-MAJOR_MARKET_PREFECTURE_TARGETS = {
-    "東京都": 75_000,
-    "神奈川県": 75_000,
-    "埼玉県": 75_000,
-    "千葉県": 75_000,
-    "大阪府": 33_334,
-    "京都府": 33_333,
-    "兵庫県": 33_333,
-    "愛知県": 100_000,
-}
 
 
 def get_db_connection():
@@ -324,7 +261,8 @@ def init_db():
     db.commit()
 
     count = db.execute("SELECT COUNT(*) AS cnt FROM companies").fetchone()["cnt"]
-    if count == 0:
+    allow_sample_data = os.environ.get("ALLOW_SAMPLE_DATA", "").lower() in {"1", "true", "yes"}
+    if count == 0 and allow_sample_data:
         sample = [
             ("株式会社サンプル商事", "商社", "東京都", "千代田区", 120, "03-1234-5678", "営業部", "未架電", ""),
             ("テックイノベーション株式会社", "IT・ソフトウェア", "東京都", "渋谷区", 45, "03-2345-6789", "開発部", "未架電", ""),
@@ -733,17 +671,6 @@ def api_count():
     return jsonify({"count": row["cnt"]})
 
 
-def get_collection_target(prefecture):
-    if prefecture in COLLECTION_EXCLUDED_PREFECTURES:
-        return None
-    baseline = PREFECTURE_BOOST_BASELINES.get(prefecture, 0)
-    if prefecture in MAJOR_MARKET_PREFECTURE_TARGETS:
-        return max(baseline, MAJOR_MARKET_PREFECTURE_TARGETS[prefecture])
-    if prefecture in ORDINANCE_DESIGNATED_PREFECTURES:
-        return max(baseline, ORDINANCE_PREFECTURE_TARGET)
-    return baseline + NORMAL_PREFECTURE_ADDITION
-
-
 @app.route("/api/progress")
 def api_progress():
     db = get_db()
@@ -766,24 +693,26 @@ def api_progress():
         """
     ).fetchone()
 
-    prefectures = []
+    progress_targets = []
     collected_total = 0
     capped_total = 0
     completed_count = 0
-    for prefecture in PREFECTURE_CODES.keys():
-        target = get_collection_target(prefecture)
-        if target is None:
-            continue
-        count = counts.get(prefecture, 0)
+    for scope in iter_collection_scopes(PREFECTURE_CODES.keys()):
+        count = sum(counts.get(prefecture, 0) for prefecture in scope["prefectures"])
+        target = scope["target"]
         collected_total += count
         capped_count = min(count, target)
         capped_total += capped_count
         if count >= target:
             completed_count += 1
-        baseline = PREFECTURE_BOOST_BASELINES.get(prefecture, 0)
-        prefectures.append(
+        baseline = sum(
+            PREFECTURE_BOOST_BASELINES.get(prefecture, 0)
+            for prefecture in scope["prefectures"]
+        )
+        progress_targets.append(
             {
-                "name": prefecture,
+                "name": scope["name"],
+                "members": scope["prefectures"],
                 "count": count,
                 "baseline": baseline,
                 "added": max(count - baseline, 0),
@@ -791,97 +720,119 @@ def api_progress():
                 "remaining": max(target - count, 0),
                 "percent": round(capped_count / target * 100, 1) if target else 0,
                 "completed": count >= target,
-                "target_type": (
-                    "主要エリア5万"
-                    if prefecture in MAJOR_MARKET_PREFECTURE_TARGETS
-                    else "政令指定都市県"
-                    if prefecture in ORDINANCE_DESIGNATED_PREFECTURES
-                    else "追加5000県"
-                ),
+                "target_type": scope["target_type"],
             }
         )
 
-    target_total = sum(pref["target"] for pref in prefectures)
+    target_total = sum(item["target"] for item in progress_targets)
     overall_percent = round(capped_total / target_total * 100, 1) if target_total else 0
     return jsonify(
         {
             "total": collected_total,
             "target_total": target_total,
             "overall_percent": overall_percent,
-            "completed_prefectures": completed_count,
-            "prefecture_total": len(prefectures),
+            "completed_targets": completed_count,
+            "target_count": len(progress_targets),
             "mode": "都道府県追加収集",
-            "description": "沖縄県・町・村を除外。通常県は開始時点から+5000社、政令指定都市がある県は合計20000社、関東エリアは合計300000社、関西エリア・名古屋エリアは各合計100000社まで。",
+            "description": "沖縄県・町・村を除外。通常県は開始時点から+5000社、政令指定都市がある県は合計20000社、関東エリアは合計800000社、関西エリア・名古屋エリアは各合計100000社まで。",
             "excluded_prefectures": sorted(COLLECTION_EXCLUDED_PREFECTURES),
             "latest": latest or {},
-            "prefectures": prefectures,
+            "prefectures": progress_targets,
         }
     )
 
 
-@app.route("/collect", methods=["GET", "POST"])
+def require_collection_token():
+    expected = os.environ.get("COLLECT_API_TOKEN", "")
+    if not expected:
+        abort(503, description="COLLECT_API_TOKEN is not configured")
+    provided = request.headers.get("X-Collect-Token", "")
+    if not hmac.compare_digest(provided, expected):
+        abort(403)
+
+
+@app.route("/collect", methods=["POST"])
 def collect():
-    if request.method == "POST":
-        industry = request.form["industry"]
-        prefecture = request.form["prefecture"]
-        municipality = request.form["municipality"]
-        count = max(1, min(1000, int(request.form.get("count", 10))))
-        assigned_to = request.form.get("assigned_to", "")
+    require_collection_token()
+    try:
+        industry, prefecture, municipality, count = validate_collection_request(request.form)
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    assigned_to = request.form.get("assigned_to", "")
 
-        db = get_db()
+    db = get_db()
+    existing_rows = db.execute(
+        "SELECT company_name, memo FROM companies WHERE prefecture=? AND municipality=?",
+        (prefecture, municipality),
+    ).fetchall()
+    exclude_names = {row["company_name"] for row in existing_rows}
+    exclude_corporate_numbers = {
+        number
+        for row in existing_rows
+        if (number := corporate_number_from_memo(row["memo"]))
+    }
+    db.commit()
 
-        # 同じ地域で既に登録済みの企業を法人番号・会社名で除外し、重複登録を防ぐ
-        existing_rows = db.execute(
-            "SELECT company_name, memo FROM companies WHERE prefecture=? AND municipality=?",
-            (prefecture, municipality),
-        ).fetchall()
-        exclude_names = {r["company_name"] for r in existing_rows}
-        exclude_corporate_numbers = set()
-        for r in existing_rows:
-            m = re.search(r"法人番号:(\d+)", r["memo"] or "")
-            if m:
-                exclude_corporate_numbers.add(m.group(1))
-
+    try:
         results = collect_companies(
-            industry, prefecture, municipality, count,
+            industry,
+            prefecture,
+            municipality,
+            count,
             exclude_corporate_numbers=exclude_corporate_numbers,
             exclude_names=exclude_names,
         )
+    except RuntimeError as exc:
+        abort(503, description=str(exc))
+    except requests.RequestException:
+        abort(502, description="gBizINFO request failed")
 
-        db.executemany(
-            """
-            INSERT INTO companies
-                (company_name, industry, prefecture, municipality, employees, phone,
-                 department, sales_department, assigned_to, status, last_approach_date, memo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    c["company_name"], c["industry"], c["prefecture"], c["municipality"],
-                    c["employees"], c["phone"], c["department"], "",
-                    assigned_to, c["status"], "", c["memo"],
-                )
-                for c in results
-            ],
-        )
-        db.commit()
-
-        return redirect(url_for(
-            "index",
-            prefecture=prefecture,
-            municipality=municipality,
-        ))
-
-    return render_template(
-        "collect.html",
-        industries=INDUSTRY_CHOICES,
-        assigned_to_choices=ASSIGNED_TO_CHOICES,
-        sales_department_choices=SALES_DEPARTMENT_CHOICES,
-        using_real_api=bool(os.environ.get("GBIZINFO_API_TOKEN")),
+    scope = get_collection_scope(prefecture)
+    db.execute(
+        "SELECT pg_advisory_xact_lock(hashtext(?))",
+        (f"telapo-collection:{scope['key']}",),
     )
+    existing_rows = db.execute(
+        "SELECT company_name, memo FROM companies WHERE prefecture=? AND municipality=?",
+        (prefecture, municipality),
+    ).fetchall()
+    results = filter_new_companies(results, existing_rows)
+
+    if request.headers.get("X-Collection-Mode") == "prefecture-boost":
+        placeholders = ", ".join("?" for _ in scope["prefectures"])
+        current = db.execute(
+            f"SELECT COUNT(*) AS cnt FROM companies WHERE prefecture IN ({placeholders})",
+            scope["prefectures"],
+        ).fetchone()["cnt"]
+        results = results[:max(scope["target"] - current, 0)]
+
+    db.executemany(
+        """
+        INSERT INTO companies
+            (company_name, industry, prefecture, municipality, employees, phone,
+             department, sales_department, assigned_to, status, last_approach_date, memo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                company["company_name"], company["industry"], company["prefecture"],
+                company["municipality"], company["employees"], company["phone"],
+                company["department"], "", assigned_to, company["status"], "", company["memo"],
+            )
+            for company in results
+        ],
+    )
+    db.commit()
+
+    return redirect(url_for(
+        "index",
+        prefecture=prefecture,
+        municipality=municipality,
+    ))
 
 
-init_db()
+if os.environ.get("SKIP_DB_INIT") != "1":
+    init_db()
 
 if __name__ == "__main__":
     app.run(debug=True, port=5050)

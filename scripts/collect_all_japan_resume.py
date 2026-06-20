@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 import sys
 import time
 from collections import defaultdict
@@ -10,6 +11,7 @@ import requests
 
 
 BASE_URL = "https://telapo-946260728277.asia-northeast1.run.app"
+COLLECT_API_TOKEN = os.environ.get("COLLECT_API_TOKEN", "")
 AREA_CODES_PATH = Path(__file__).resolve().parents[1] / "area_codes.json"
 TARGET_PER_PREFECTURE = 10_000
 MAX_PASSES = 10
@@ -17,6 +19,7 @@ REQUEST_INTERVAL_SECONDS = 2
 COUNT_TIMEOUT_SECONDS = 120
 COLLECT_TIMEOUT_SECONDS = 330
 MAX_RETRIES = 4
+RETRYABLE_STATUS_CODES = {408, 429}
 
 
 def log(message):
@@ -41,10 +44,21 @@ def request_with_retries(method, url, **kwargs):
             return response
         except requests.RequestException as exc:
             last_error = exc
+            status = exc.response.status_code if exc.response is not None else None
+            retryable = status is None or status in RETRYABLE_STATUS_CODES or status >= 500
+            if not retryable or attempt == MAX_RETRIES:
+                break
             wait = min(60, attempt * 5)
             log(f"retry {attempt}/{MAX_RETRIES} after {type(exc).__name__}: {exc}")
             time.sleep(wait)
     raise last_error
+
+
+def is_permanent_http_error(exc):
+    if exc.response is None:
+        return False
+    status = exc.response.status_code
+    return 400 <= status < 500 and status not in RETRYABLE_STATUS_CODES
 
 
 def get_count(prefecture=None):
@@ -69,6 +83,7 @@ def collect(prefecture, municipality, count):
             "count": str(count),
             "assigned_to": "",
         },
+        headers={"X-Collect-Token": COLLECT_API_TOKEN},
         allow_redirects=False,
         timeout=COLLECT_TIMEOUT_SECONDS,
     )
@@ -76,6 +91,8 @@ def collect(prefecture, municipality, count):
 
 
 def main():
+    if not COLLECT_API_TOKEN:
+        raise RuntimeError("COLLECT_API_TOKEN is required")
     prefectures, municipalities_by_prefecture = load_municipalities_by_prefecture()
     log("===== RESUME START =====")
     log(f"total_before={get_count()}")
@@ -110,8 +127,14 @@ def main():
                         f"[{prefecture}/{municipality}] status={status} "
                         f"(count_before={current}, requested={request_count})"
                     )
+                except requests.HTTPError as exc:
+                    if is_permanent_http_error(exc):
+                        raise
+                    log(f"[{prefecture}/{municipality}] ERROR {type(exc).__name__}: {exc}")
+                    raise
                 except requests.RequestException as exc:
                     log(f"[{prefecture}/{municipality}] ERROR {type(exc).__name__}: {exc}")
+                    raise
 
                 time.sleep(REQUEST_INTERVAL_SECONDS)
 

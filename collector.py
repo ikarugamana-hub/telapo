@@ -6,8 +6,8 @@
   (https://info.gbiz.go.jp/) から実データを取得する。
   ※ gBizINFO は無料のAPIトークン登録が必要で、電話番号等は提供されないため
     取得できた項目のみ埋め、残りは手動で補完することを想定。
-- 未設定の場合は、業種・地域に応じたサンプル企業データを自動生成する
-  (デモ・動作確認用)。
+- 未設定の場合は失敗する。サンプル企業データはALLOW_SAMPLE_DATAを明示した
+  開発環境でのみ生成する。
 """
 
 import json
@@ -21,7 +21,7 @@ from pathlib import Path
 import requests
 
 GBIZINFO_API_TOKEN = os.environ.get("GBIZINFO_API_TOKEN")
-GBIZINFO_ENDPOINT = "https://info.gbiz.go.jp/hojin/v1/hojin"
+GBIZINFO_ENDPOINT = "https://api.info.gbiz.go.jp/hojin/v2/hojin"
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 ANTHROPIC_MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages"
@@ -56,6 +56,48 @@ INDUSTRY_KEYWORDS = {
     "サービス業": ["サービス", "コンサルティング", "プランニング"],
     "その他": ["商会", "企画", "事務所"],
 }
+
+
+def corporate_number_from_memo(memo):
+    match = re.search(r"法人番号:(\d+)", memo or "")
+    return match.group(1) if match else ""
+
+
+def filter_new_companies(companies, existing_rows):
+    existing_names = {row["company_name"] for row in existing_rows}
+    existing_numbers = {
+        number
+        for row in existing_rows
+        if (number := corporate_number_from_memo(row["memo"]))
+    }
+    filtered = []
+    for company in companies:
+        name = company["company_name"]
+        corporate_number = corporate_number_from_memo(company.get("memo"))
+        if name in existing_names or (corporate_number and corporate_number in existing_numbers):
+            continue
+        filtered.append(company)
+        existing_names.add(name)
+        if corporate_number:
+            existing_numbers.add(corporate_number)
+    return filtered
+
+
+def validate_collection_request(form):
+    industry = (form.get("industry") or "").strip()
+    prefecture = (form.get("prefecture") or "").strip()
+    municipality = (form.get("municipality") or "").strip()
+    if not industry or not prefecture or not municipality:
+        raise ValueError("industry, prefecture and municipality are required")
+    if prefecture not in PREFECTURE_CODES or f"{prefecture}|{municipality}" not in CITY_CODES:
+        raise ValueError("invalid prefecture and municipality pair")
+    try:
+        count = int(form.get("count", 10))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("count must be an integer") from exc
+    if count < 1 or count > 1_000:
+        raise ValueError("count must be between 1 and 1000")
+    return industry, prefecture, municipality, count
 
 STANDARD_INDUSTRY_CATEGORIES = [
     "ゲームセンター",
@@ -272,7 +314,7 @@ def _fetch_gbizinfo_detail(corporate_number, headers):
 # 1ページあたりの取得件数(APIの上限)
 GBIZINFO_PAGE_LIMIT = 100
 # 1回の収集で走査するページ数の上限(これを超えて候補を探さない)
-GBIZINFO_MAX_PAGES = int(os.environ.get("GBIZINFO_MAX_PAGES", "50"))
+GBIZINFO_MAX_PAGES = int(os.environ.get("GBIZINFO_MAX_PAGES", "10"))
 # 詳細API(従業員数等)を問い合わせる候補数の上限
 GBIZINFO_DETAIL_CAP = 150
 # 詳細APIの並列リクエスト数
@@ -296,6 +338,7 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
     city_code = CITY_CODES.get(f"{prefecture}|{municipality}")
     if prefecture_code is None or city_code is None:
         return []
+    city_code = city_code[-3:]
 
     headers = {"X-hojinInfo-api-token": GBIZINFO_API_TOKEN, "Accept": "application/json"}
 
@@ -313,7 +356,9 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
             response.raise_for_status()
             items = response.json().get("hojin-infos", [])
         except requests.RequestException:
-            # レート制限等で検索APIが失敗した場合は、それまでに集めた候補で処理を続ける
+            if not candidates:
+                raise
+            # 後続ページの失敗時は、取得済み候補だけを返して再実行で補完する。
             break
 
         for item in items:
@@ -401,14 +446,20 @@ def fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corpo
 
 
 def collect_companies(industry, prefecture, municipality, count, exclude_corporate_numbers=None, exclude_names=None):
-    """企業情報を収集する。APIトークンがあれば実データ、無ければサンプルデータを返す。
+    """企業情報を収集する。通常はgBizINFOの実データだけを返す。
 
     APIトークンが設定されている場合は実データのみを返す(該当企業が無ければ0件)。
-    架空のサンプルデータで件数を埋めることはしない。
+    サンプル生成はALLOW_SAMPLE_DATAを明示した開発環境に限定する。
     """
     if GBIZINFO_API_TOKEN:
-        try:
-            return fetch_from_gbizinfo(industry, prefecture, municipality, count, exclude_corporate_numbers, exclude_names)
-        except requests.RequestException:
-            return []
-    return generate_sample_companies(industry, prefecture, municipality, count)
+        return fetch_from_gbizinfo(
+            industry,
+            prefecture,
+            municipality,
+            count,
+            exclude_corporate_numbers,
+            exclude_names,
+        )
+    if os.environ.get("ALLOW_SAMPLE_DATA", "").lower() in {"1", "true", "yes"}:
+        return generate_sample_companies(industry, prefecture, municipality, count)
+    raise RuntimeError("GBIZINFO_API_TOKEN is required for company collection")

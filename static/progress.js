@@ -21,7 +21,7 @@ function renderProgress(data) {
     document.querySelector('[data-progress-total]').textContent =
         `対象合計 ${formatNumber(data.total)} / ${formatNumber(data.target_total)} 件 (${data.overall_percent}%)`;
     document.querySelector('[data-progress-prefectures]').textContent =
-        `達成 ${data.completed_prefectures} / ${data.prefecture_total} 都道府県`;
+        `達成 ${data.completed_targets} / ${data.target_count} 収集目標`;
 
     const bar = document.querySelector('[data-progress-bar]');
     bar.style.width = `${Math.min(data.overall_percent, 100)}%`;
@@ -31,7 +31,7 @@ function renderProgress(data) {
     data.prefectures.forEach(pref => {
         const item = document.createElement('div');
         item.className = `progress-prefecture${pref.completed ? ' completed' : ''}`;
-        if (latest.prefecture === pref.name) {
+        if (latest.prefecture === pref.name || (pref.members || []).includes(latest.prefecture)) {
             item.classList.add('active');
         }
 
